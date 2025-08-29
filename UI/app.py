@@ -175,17 +175,41 @@ def check_environment():
     ]
     
     for script in required_scripts:
-        if not Path(script).exists():
-            issues.append(f"Required script not found: {script}")
+        script_path = Path(script)
+        if not script_path.exists():
+            # Try alternative paths for different working directories
+            alt_paths = [
+                Path(script.replace("../", "")),  # From project root
+                Path(script.replace("../", "../../")),  # From UI subdirectory
+            ]
+            found = False
+            for alt_path in alt_paths:
+                if alt_path.exists():
+                    found = True
+                    break
+            if not found:
+                issues.append(f"Required script not found: {script}")
     
     # Check if .env file exists
-    if not Path("../.env").exists():
+    env_paths = [Path("../.env"), Path(".env"), Path("../../.env")]
+    env_found = any(env_path.exists() for env_path in env_paths)
+    if not env_found:
         issues.append("OpenAI API key file (.env) not found")
     else:
         # Check if API key is valid
         try:
             from dotenv import load_dotenv
-            load_dotenv("../.env")
+            # Try to load .env from multiple possible locations
+            env_loaded = False
+            for env_path in env_paths:
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    env_loaded = True
+                    break
+            
+            if not env_loaded:
+                load_dotenv("../.env")  # Fallback
+                
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
                 issues.append("OpenAI API key not found in .env file")
@@ -214,7 +238,18 @@ def test_api_connection():
         from dotenv import load_dotenv
         import openai
         
-        load_dotenv("../.env")
+        # Try to load .env from multiple possible locations
+        env_paths = [Path("../.env"), Path(".env"), Path("../../.env")]
+        env_loaded = False
+        for env_path in env_paths:
+            if env_path.exists():
+                load_dotenv(env_path)
+                env_loaded = True
+                break
+        
+        if not env_loaded:
+            load_dotenv("../.env")  # Fallback
+            
         api_key = os.getenv('OPENAI_API_KEY')
         
         if not api_key:
