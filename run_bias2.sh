@@ -134,19 +134,56 @@ extract_report_id() {
 run_hybrid_extraction() {
     local pdf_file="$1"
     local report_id="$2"
+    local fast_mode="$3"
     
     log "Starting hybrid PDF extraction..."
     
     # Create output directory if it doesn't exist
     mkdir -p "$HYBRID_OUTPUT_DIR"
     
-    # Run hybrid extractor
-    if python "$SCRIPTS_DIR/hybrid_extractor.py" "$pdf_file" "$HYBRID_OUTPUT_DIR" "$report_id"; then
-        success "Hybrid extraction completed"
-        return 0
+    if [[ "$fast_mode" == "true" ]]; then
+        # Run fast path hybrid extractor
+        log "Using fast path mode (≤3 LLM calls per report)"
+        
+        # First, run the legacy hybrid extractor to get the paragraphs JSONL file
+        log "Running legacy hybrid extractor to get paragraphs..."
+        if python "$SCRIPTS_DIR/hybrid_extractor.py" "$pdf_file" "$HYBRID_OUTPUT_DIR" "$report_id"; then
+            success "Legacy hybrid extraction completed (for paragraphs)"
+        else
+            error "Legacy hybrid extraction failed (needed for paragraphs)"
+            return 1
+        fi
+        
+        # Find the generated JSONL file
+        local jsonl_file="${pdf_basename}_hybrid.jsonl"
+        local jsonl_path="$HYBRID_OUTPUT_DIR/$jsonl_file"
+        
+        if [[ ! -f "$jsonl_path" ]]; then
+            error "JSONL file not found: $jsonl_path"
+            return 1
+        fi
+        
+        # Now run the fast path extractor with the correct arguments
+        if python "$SCRIPTS_DIR/fast_path_hybrid_extractor.py" \
+            --paragraphs "$jsonl_path" \
+            --out_dir "$HYBRID_OUTPUT_DIR" \
+            --model "gpt-4o-mini"; then
+            success "Fast path hybrid extraction completed"
+            return 0
+        else
+            error "Fast path hybrid extraction failed"
+            return 1
+        fi
     else
-        error "Hybrid extraction failed"
-        return 1
+        # Run legacy hybrid extractor
+        log "Using legacy mode (multiple LLM calls per report)"
+        if python "$SCRIPTS_DIR/hybrid_extractor.py" "$pdf_file" "$HYBRID_OUTPUT_DIR" "$report_id"; then
+            success "Hybrid extraction completed"
+            return 0
+        else
+            error "Hybrid extraction failed"
+            return 1
+        fi
     fi
 }
 
@@ -599,6 +636,15 @@ main() {
     echo "=========================================="
     echo ""
     
+    # Check for fast path mode
+    local fast_mode="false"
+    if [[ "$1" == "--fast-reconcile" ]]; then
+        fast_mode="true"
+        shift  # Remove the flag from arguments
+        echo -e "${CYAN}🚀 Fast Path Mode Enabled (≤3 LLM calls per report)${NC}"
+        echo ""
+    fi
+    
     # Check environment and dependencies
     log "Checking environment..."
     check_environment
@@ -622,7 +668,7 @@ main() {
     echo ""
     
     # Step 1: Hybrid extraction (let the extractor find the report ID)
-    if ! run_hybrid_extraction "$pdf_file" ""; then
+    if ! run_hybrid_extraction "$pdf_file" "" "$fast_mode"; then
         error "Pipeline failed at hybrid extraction step"
         exit 1
     fi
@@ -678,11 +724,13 @@ show_help() {
     echo ""
     echo "Usage:"
     echo "  ./run_bias2.sh [pdf_filename]"
+    echo "  ./run_bias2.sh --fast-reconcile [pdf_filename]   # Fast path mode (≤3 LLM calls)"
     echo "  ./run_bias2.sh --interactive [pdf_filename]      # Start interactive AI session"
     echo ""
     echo "Examples:"
     echo "  ./run_bias2.sh                                    # Interactive mode"
     echo "  ./run_bias2.sh lebanon-1-32.pdf                  # Process specific file"
+    echo "  ./run_bias2.sh --fast-reconcile lebanon-1-32.pdf # Fast path mode"
     echo "  ./run_bias2.sh extraction/reports_pdf/lebanon-1-32.pdf  # Full path"
     echo "  ./run_bias2.sh --interactive lebanon-1-32.pdf    # Start AI chat session"
     echo ""
@@ -692,6 +740,7 @@ show_help() {
     echo "  • OpenAI API key configured (automatically loaded via load_dotenv())"
     echo ""
     echo "Enhanced Features:"
+    echo "  • Fast path mode: ≤3 LLM calls per report (vs. hundreds in legacy mode)"
     echo "  • GPT-4o quantitative extraction (AI-powered structured data extraction)"
     echo "  • Actor disambiguation and analysis"
     echo "  • Precision hybrid extraction (Python surgical + API semantic)"

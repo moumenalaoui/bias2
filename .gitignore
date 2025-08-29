@@ -1,3 +1,8 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
 # Python
 __pycache__/
 *.py[cod]
@@ -16,24 +21,16 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual Environment
+# Virtual environments
 bias_env2/
 venv/
 env/
 ENV/
-
-# Environment Variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # IDE
 .vscode/
@@ -58,38 +55,29 @@ logs/
 # Temporary files
 *.tmp
 *.temp
-/tmp/
+temp/
+tmp/
 
-# Output files
-*.csv
-*.jsonl
-*.json
-!requirements*.txt
-!package*.json
+# Output directories
+out/
+extraction/API_output/
+extraction/hybrid_output/
+extraction/JSONL_outputs/
+precision_hybrid_results/
 
-# Cache directories
+# Cache
 .cache/
-.pytest_cache/
-.coverage
+resolution_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# pytest
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
 
 # Streamlit
-.streamlit/
-
-# Large data files
-*.pdf
-extraction/reports_pdf/
-extraction/hybrid_output/
-extraction/JSONL_outputs/
-precision_hybrid_results/
-air_violation_data/
-resolution_cache/
-
-# Backup files
-*.bak
-*.backup
+.streamlit/secrets.toml

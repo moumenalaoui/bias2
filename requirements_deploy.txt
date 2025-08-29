@@ -1,4 +1,4 @@
-# Core Dependencies
+# Core Dependencies for Streamlit Cloud Deployment
 streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.24.0
@@ -38,3 +38,6 @@ textblob>=0.17.1
 tqdm>=4.65.0
 click>=8.1.0
 pathlib2>=2.3.7
+
+# Additional dependencies for deployment
+altair>=5.0.0
