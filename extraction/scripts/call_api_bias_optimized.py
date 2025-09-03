@@ -295,7 +295,10 @@ async def process_paragraphs_optimized(test_mode=True, specific_file=None, outpu
     if output_dir:
         bias_output = os.path.join(output_dir, "text_bias_analysis_results.jsonl")
     else:
-        bias_output = "extraction/API_output/bias_analysis.jsonl"
+        # Fallback to universal output structure
+        bias_output = "extraction/universal_output/bias_analysis/text_bias_analysis_results.jsonl"
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(bias_output), exist_ok=True)
     
     # Clear output file
     if os.path.exists(bias_output):

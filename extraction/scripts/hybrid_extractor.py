@@ -609,22 +609,18 @@ def extract_hybrid(pdf_path: str, output_dir: str, report_id: str = "", publicat
         )
         
         # Step 3: Save as JSONL
-        jsonl_path = markdown_path.replace('_marker.md', '_hybrid.jsonl')
+        jsonl_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(pdf_path))[0]}_hybrid.jsonl")
         with open(jsonl_path, 'w', encoding='utf-8') as f:
             for para in paragraphs:
                 f.write(json.dumps(para, ensure_ascii=False) + '\n')
         
         # Step 4: Save as CSV for compatibility
-        csv_path = markdown_path.replace('_marker.md', '_hybrid.csv')
+        csv_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(pdf_path))[0]}_hybrid.csv")
         df = pd.DataFrame(paragraphs)
         df.to_csv(csv_path, index=False)
         
-        # Step 5: Also save to JSONL_outputs directory for API processing
-        jsonl_outputs_dir = os.path.join(os.path.dirname(output_dir), "JSONL_outputs")
-        os.makedirs(jsonl_outputs_dir, exist_ok=True)
-        
-        # Create structured JSONL file for API processing
-        structured_jsonl_path = os.path.join(jsonl_outputs_dir, f"{os.path.splitext(os.path.basename(pdf_path))[0]}-structured.jsonl")
+        # Step 5: Also save to the same output directory for consistency
+        structured_jsonl_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(pdf_path))[0]}_structured.jsonl")
         with open(structured_jsonl_path, 'w', encoding='utf-8') as f:
             for para in paragraphs:
                 f.write(json.dumps(para, ensure_ascii=False) + '\n')
