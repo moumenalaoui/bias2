@@ -28,11 +28,11 @@ load_dotenv()
 # Initialize OpenAI client
 client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Configuration
+# Configuration - Super Fast Mode
 MODEL = "gpt-4o"
-RATE_LIMIT = 50  # requests per minute
-MAX_CONCURRENT_REQUESTS = 5  # Number of concurrent API calls
-BATCH_SIZE = 10  # Process paragraphs in batches
+RATE_LIMIT = 200  # requests per minute (super-fast mode)
+MAX_CONCURRENT_REQUESTS = 30  # Number of concurrent API calls (super-fast mode)
+BATCH_SIZE = 50  # Process paragraphs in large batches for maximum speed
 
 # Resolution cache directory
 RESOLUTION_CACHE_DIR = "resolution_cache"
@@ -189,10 +189,11 @@ async def call_openai_api(content, function_schema, analysis_type, resolution_ca
                     functions=[function_schema],
                     function_call={"name": function_schema["name"]},
                     temperature=0,  # Maximum precision
-                    max_tokens=4000,  # Comprehensive analysis
+                    max_tokens=2000,  # Optimized for super-fast processing
                     top_p=0.9,  # Focus on most likely tokens
                     frequency_penalty=0.1,  # Reduce repetition
-                    presence_penalty=0.1  # Encourage diverse coverage
+                    presence_penalty=0.1,  # Encourage diverse coverage
+                    timeout=20  # Shorter timeout for faster processing
                 )
                 
                 if response.choices and response.choices[0].message.function_call:
@@ -242,6 +243,153 @@ async def process_paragraph_batch(paragraphs_batch, rate_limiter, resolution_cac
             elif isinstance(result, Exception):
                 logger.error(f"Paragraph processing failed: {result}")
 
+async def process_paragraph_batch_with_tracking(paragraphs_batch, rate_limiter, resolution_cache, output_file, report_info, llm_call_limit, current_calls_used):
+    """Process a batch of paragraphs with LLM call tracking using high-concurrency individual processing."""
+    # Check if we've reached the LLM call limit
+    if llm_call_limit and current_calls_used >= llm_call_limit:
+        logger.info(f"Reached LLM call limit. Skipping batch.")
+        return 0
+    
+    # Process paragraphs individually but with high concurrency for maximum speed
+    tasks = []
+    batch_calls_used = 0
+    
+    for para in paragraphs_batch:
+        # Check if we've reached the LLM call limit
+        if llm_call_limit and (current_calls_used + batch_calls_used) >= llm_call_limit:
+            logger.info(f"Reached LLM call limit in batch processing. Stopping at paragraph {para.get('paragraph_id', 'unknown')}")
+            break
+            
+        content = para.get("text", "")
+        paragraph_id = para.get("paragraph_id", "unknown")
+        
+        if not content.strip():
+            continue
+            
+        task = asyncio.create_task(
+            process_single_paragraph_with_tracking(content, paragraph_id, rate_limiter, resolution_cache, report_info)
+        )
+        tasks.append(task)
+        batch_calls_used += 1  # Each paragraph = 1 LLM call
+    
+    # Wait for all tasks to complete
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Write results to file
+    async with aiofiles.open(output_file, 'a', encoding='utf-8') as f:
+        for result in results:
+            if isinstance(result, dict) and result:
+                await f.write(json.dumps(result, ensure_ascii=False) + '\n')
+            elif isinstance(result, Exception):
+                logger.error(f"Paragraph processing failed: {result}")
+    
+    return batch_calls_used
+
+async def process_paragraph_chunk(paragraphs_chunk, rate_limiter, resolution_cache, report_info):
+    """Process multiple paragraphs in a single LLM call for efficiency."""
+    try:
+        # Combine all paragraphs into a single text for analysis
+        combined_text = ""
+        paragraph_info = []
+        
+        for para in paragraphs_chunk:
+            content = para.get("text", "")
+            paragraph_id = para.get("paragraph_id", "unknown")
+            
+            if content.strip():
+                combined_text += f"\n\n--- PARAGRAPH {paragraph_id} ---\n{content}"
+                paragraph_info.append({
+                    "paragraph_id": paragraph_id,
+                    "text": content,
+                    "start_pos": len(combined_text) - len(content),
+                    "end_pos": len(combined_text)
+                })
+        
+        if not combined_text.strip():
+            return []
+        
+        logger.info(f"Processing chunk of {len(paragraphs_chunk)} paragraphs in single LLM call")
+        
+        # Create a modified function schema for batch processing
+        batch_bias_info = {
+            "name": "extract_bias_info_batch",
+            "description": "Analyze bias in multiple UN report paragraphs using Entman's framing theory",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paragraph_analyses": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "paragraph_id": {"type": "string"},
+                                "core_actors": {"type": "array", "items": {"type": "string"}},
+                                "action": {"type": ["string", "null"]},
+                                "location": {"type": ["string", "null"]},
+                                "occurrence_date": {"type": ["string", "null"]},
+                                "violation_type": {"type": "array", "items": {"type": "string"}},
+                                "violation_subtypes": {"type": "array", "items": {"type": "string"}},
+                                "bias_flag": {"type": "string", "enum": ["none", "framing", "selection", "omission"]},
+                                "bias_reason": {"type": "string"},
+                                "summary": {"type": "string"},
+                                "entman_framing_analysis": {"type": "object"},
+                                "framing_bias_indicators": {"type": "object"},
+                                "language_analysis": {"type": "object"},
+                                "actor_coverage_analysis": {"type": "object"},
+                                "incident_specific_analysis": {"type": "array", "items": {"type": "object"}},
+                                "actor_comparison_analysis": {"type": "object"},
+                                "systemic_bias_indicators": {"type": "object"}
+                            },
+                            "required": [
+                                "paragraph_id", "core_actors", "action", "location", "occurrence_date", 
+                                "violation_type", "violation_subtypes", "bias_flag", "bias_reason",
+                                "summary", "entman_framing_analysis", "framing_bias_indicators", 
+                                "language_analysis", "actor_coverage_analysis", "incident_specific_analysis", 
+                                "actor_comparison_analysis", "systemic_bias_indicators"
+                            ]
+                        }
+                    }
+                },
+                "required": ["paragraph_analyses"]
+            }
+        }
+        
+        # Get batch analysis from LLM
+        batch_result = await call_openai_api(
+            combined_text, batch_bias_info, "bias_batch", resolution_cache, rate_limiter
+        )
+        
+        if batch_result and "paragraph_analyses" in batch_result:
+            results = []
+            for analysis in batch_result["paragraph_analyses"]:
+                # Add original text and metadata
+                analysis.update({
+                    "text": next((p["text"] for p in paragraph_info if p["paragraph_id"] == analysis.get("paragraph_id")), ""),
+                    "llm_call_used": True,
+                    **report_info
+                })
+                
+                # Add legal grounding
+                try:
+                    from legal_violation_mapper import LegalViolationMapper
+                    mapper = LegalViolationMapper()
+                    enhanced_bias = mapper.analyze_bias_with_legal_grounding(analysis)
+                    analysis.update(enhanced_bias)
+                except Exception as e:
+                    logger.warning(f"Could not add legal grounding to batch analysis: {e}")
+                
+                results.append(analysis)
+            
+            logger.info(f"Completed batch analysis for {len(results)} paragraphs")
+            return results
+        else:
+            logger.warning("Failed to get batch bias analysis")
+            return []
+            
+    except Exception as e:
+        logger.error(f"Error processing paragraph chunk: {e}")
+        return []
+
 async def process_single_paragraph(content, paragraph_id, rate_limiter, resolution_cache, report_info):
     """Process a single paragraph."""
     try:
@@ -278,10 +426,51 @@ async def process_single_paragraph(content, paragraph_id, rate_limiter, resoluti
         logger.error(f"Error processing paragraph {paragraph_id}: {e}")
         return None
 
-async def process_paragraphs_optimized(test_mode=True, specific_file=None, output_dir=None, max_paragraphs=None):
+async def process_single_paragraph_with_tracking(content, paragraph_id, rate_limiter, resolution_cache, report_info):
+    """Process a single paragraph with LLM call tracking."""
+    try:
+        logger.info(f"Processing paragraph {paragraph_id} ({len(content)} chars)")
+        
+        bias_result = await call_openai_api(
+            content, extract_bias_info(), "bias", resolution_cache, rate_limiter
+        )
+        
+        if bias_result:
+            bias_result.update({
+                "paragraph_id": paragraph_id,
+                "text": content,
+                "llm_call_used": True,  # Track that this paragraph used an LLM call
+                **report_info
+            })
+            
+            # Add legal grounding to bias analysis
+            try:
+                from legal_violation_mapper import LegalViolationMapper
+                mapper = LegalViolationMapper()
+                enhanced_bias = mapper.analyze_bias_with_legal_grounding(bias_result)
+                bias_result.update(enhanced_bias)
+                logger.info(f"Added legal grounding to bias analysis for paragraph {paragraph_id}")
+            except Exception as e:
+                logger.warning(f"Could not add legal grounding to bias analysis: {e}")
+            
+            logger.info(f"Completed bias analysis for paragraph {paragraph_id}")
+            return bias_result
+        else:
+            logger.warning(f"Failed to get bias analysis for paragraph {paragraph_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error processing paragraph {paragraph_id}: {e}")
+        return None
+
+async def process_paragraphs_optimized(test_mode=True, specific_file=None, output_dir=None, max_paragraphs=None, max_llm_calls=None):
     """Process all paragraphs with optimized parallel processing."""
     resolution_cache = load_resolution_cache()
     rate_limiter = RateLimiter(RATE_LIMIT, MAX_CONCURRENT_REQUESTS)
+    
+    # Track LLM calls if limit is specified
+    llm_calls_used = 0
+    llm_call_limit = max_llm_calls
     
     # Use provided input file or default directory
     if specific_file:
@@ -338,11 +527,21 @@ async def process_paragraphs_optimized(test_mode=True, specific_file=None, outpu
         
         # Process paragraphs in batches
         for i in range(0, len(paragraphs), BATCH_SIZE):
+            # Check if we've reached the LLM call limit
+            if llm_call_limit and llm_calls_used >= llm_call_limit:
+                logger.info(f"Reached LLM call limit of {llm_call_limit}. Stopping processing.")
+                break
+                
             batch = paragraphs[i:i + BATCH_SIZE]
             logger.info(f"Processing batch {i//BATCH_SIZE + 1}/{(len(paragraphs) + BATCH_SIZE - 1)//BATCH_SIZE}")
             
-            await process_paragraph_batch(batch, rate_limiter, resolution_cache, bias_output, report_info)
-            total_processed += len(batch)
+            # Process batch and track LLM calls
+            batch_calls_used = await process_paragraph_batch_with_tracking(batch, rate_limiter, resolution_cache, bias_output, report_info, llm_call_limit, llm_calls_used)
+            llm_calls_used += batch_calls_used
+            
+            # Calculate actual paragraphs processed (1 paragraph per LLM call with high concurrency)
+            paragraphs_processed_in_batch = batch_calls_used
+            total_processed += paragraphs_processed_in_batch
             
             # Progress update
             elapsed = time.time() - start_time
@@ -351,6 +550,7 @@ async def process_paragraphs_optimized(test_mode=True, specific_file=None, outpu
             eta = remaining_paras * avg_time_per_para
             
             logger.info(f"Progress: {total_processed}/{len(paragraphs)} paragraphs processed")
+            logger.info(f"LLM calls used: {llm_calls_used}/{llm_call_limit if llm_call_limit else 'unlimited'}")
             logger.info(f"Average time per paragraph: {avg_time_per_para:.1f}s")
             logger.info(f"Estimated time remaining: {eta/60:.1f} minutes")
     
@@ -358,8 +558,26 @@ async def process_paragraphs_optimized(test_mode=True, specific_file=None, outpu
     logger.info(f"🎉 Optimized bias analysis completed!")
     logger.info(f"Total time: {total_time/60:.1f} minutes")
     logger.info(f"Total paragraphs processed: {total_processed}")
+    logger.info(f"Total LLM calls used: {llm_calls_used}/{llm_call_limit if llm_call_limit else 'unlimited'}")
     logger.info(f"Average time per paragraph: {total_time/total_processed:.1f}s")
     logger.info(f"Results saved to: {bias_output}")
+    
+    # Save summary with LLM call tracking
+    summary_file = bias_output.replace('.jsonl', '_summary.json')
+    summary_data = {
+        "total_paragraphs_processed": total_processed,
+        "total_llm_calls_used": llm_calls_used,
+        "llm_call_limit": llm_call_limit,
+        "processing_time_minutes": total_time/60,
+        "average_time_per_paragraph": total_time/total_processed if total_processed > 0 else 0,
+        "output_file": bias_output,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        json.dump(summary_data, f, indent=2)
+    
+    logger.info(f"Summary saved to: {summary_file}")
     
     return bias_output
 
@@ -373,6 +591,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-paragraphs", type=int, default=None, help="Maximum number of paragraphs to process")
     parser.add_argument("--max-concurrent", type=int, default=5, help="Maximum concurrent API requests")
     parser.add_argument("--batch-size", type=int, default=10, help="Batch size for processing")
+    parser.add_argument("--max-llm-calls", type=int, default=None, help="Maximum number of LLM calls to use")
     
     args = parser.parse_args()
     
@@ -389,5 +608,6 @@ if __name__ == "__main__":
         test_mode=test_mode, 
         specific_file=input_file, 
         output_dir=output_dir,
-        max_paragraphs=args.max_paragraphs
+        max_paragraphs=args.max_paragraphs,
+        max_llm_calls=args.max_llm_calls
     )) 

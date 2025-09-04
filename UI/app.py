@@ -121,7 +121,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, min_calls=3, max_calls=3):
+def run_fast_path_extraction(pdf_file, output_dir, include_quantitative=True, include_bias_analysis=False, process_all_paragraphs=True, min_calls=3, max_calls=3):
     """Run the Fast Path extraction pipeline with universal output structure and configurable LLM calls"""
     try:
         # Save PDF to extraction directory
@@ -172,35 +172,40 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         jsonl_file = jsonl_files[0]
         st.info(f"Found JSONL file: {jsonl_file.name}")
         
-        # Run ultra-fast extraction with user-configured LLM calls
-        fast_result = subprocess.run([
-            sys.executable, "ultra_fast_quantitative_extractor.py",
-            "--input", str(jsonl_file), 
-            "--output_dir", str(quantitative_dir), 
-            "--max_windows", str(max_calls)
-        ], capture_output=True, text=True, cwd=scripts_dir, timeout=300)
-        
-        if fast_result.returncode != 0:
-            return False, f"Fast extraction failed: {fast_result.stderr}"
-        
-        st.info(f"Quantitative extraction completed with {min_calls}-{max_calls} LLM calls")
-        
-        # Check quantitative results
-        results_file = quantitative_dir / "ultra_fast_extraction_results.jsonl"
-        summary_file = quantitative_dir / "ultra_fast_extraction_summary.json"
-        
-        if not (results_file.exists() and summary_file.exists()):
-            return False, "Quantitative results files not found"
-        
-        # Load summary data
-        with open(summary_file, 'r') as f:
-            summary = json.load(f)
+        # Run quantitative extraction if requested
+        if include_quantitative:
+            fast_result = subprocess.run([
+                sys.executable, "ultra_fast_quantitative_extractor.py",
+                "--input", str(jsonl_file), 
+                "--output_dir", str(quantitative_dir), 
+                "--max_windows", str(max_calls)
+            ], capture_output=True, text=True, cwd=scripts_dir, timeout=300)
+            
+            if fast_result.returncode != 0:
+                return False, f"Fast extraction failed: {fast_result.stderr}"
+            
+            st.info(f"Quantitative extraction completed with {min_calls}-{max_calls} LLM calls")
+            
+            # Check quantitative results
+            results_file = quantitative_dir / "ultra_fast_extraction_results.jsonl"
+            summary_file = quantitative_dir / "ultra_fast_extraction_summary.json"
+            
+            if not (results_file.exists() and summary_file.exists()):
+                return False, "Quantitative results files not found"
+            
+            # Load summary data
+            with open(summary_file, 'r') as f:
+                summary = json.load(f)
+        else:
+            # Skip quantitative extraction
+            st.info("Skipping quantitative extraction as requested")
+            summary = {"total_paragraphs_processed": 0, "total_llm_calls_used": 0}
         
         # If bias analysis is requested, run it now
         if include_bias_analysis:
             st.info(f"Running bias analysis on {jsonl_file.name}...")
             
-            bias_success, bias_output = run_bias_analysis(jsonl_file, bias_analysis_dir, max_calls)
+            bias_success, bias_output = run_bias_analysis(jsonl_file, bias_analysis_dir, process_all_paragraphs, max_calls)
             if bias_success:
                 st.success(f"Bias analysis completed and saved to universal output")
                 # Add bias analysis info to summary
@@ -215,7 +220,13 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         summary['pdf_conversion_dir'] = str(pdf_conversion_dir)
         summary['quantitative_dir'] = str(quantitative_dir)
         summary['bias_analysis_dir'] = str(bias_analysis_dir)
-        summary['quantitative_file'] = str(results_file)  # Add the quantitative file path
+        
+        # Only add quantitative file path if quantitative extraction was enabled
+        if include_quantitative:
+            summary['quantitative_file'] = str(results_file)
+        else:
+            summary['quantitative_file'] = None
+            
         summary['llm_calls_config'] = {'min_calls': min_calls, 'max_calls': max_calls, 'actual_calls': summary.get('llm_calls_used', 0)}
         
         return True, summary
@@ -223,8 +234,8 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
     except Exception as e:
         return False, f"Error: {str(e)}"
 
-def run_bias_analysis(jsonl_file_path, output_dir, max_calls=5):
-    """Run bias analysis on the extracted JSONL data with limited LLM calls"""
+def run_bias_analysis(jsonl_file_path, output_dir, process_all_paragraphs=True, max_calls=None):
+    """Run bias analysis on the extracted JSONL data"""
     try:
         st.info("Starting bias analysis...")
         
@@ -233,23 +244,56 @@ def run_bias_analysis(jsonl_file_path, output_dir, max_calls=5):
         project_root = current_dir.parent if current_dir.name == "UI" else current_dir
         scripts_dir = project_root / "extraction" / "scripts"
         
-        # Run bias analysis with limited LLM calls
-        # Calculate how many paragraphs to process based on max_calls
-        # For bias analysis, we'll process max_calls paragraphs to respect user's preference
-        bias_result = subprocess.run([
-            sys.executable, "call_api_bias_optimized.py", 
-            "--input", str(jsonl_file_path),
-            "--output", str(output_dir),
-            "--max-paragraphs", str(max_calls)
-        ], capture_output=True, text=True, cwd=scripts_dir, timeout=600)
+        # Run bias analysis based on user preferences
+        if process_all_paragraphs:
+            # Process all paragraphs - no LLM call limit
+            st.info("Bias analysis will process ALL paragraphs in the report (comprehensive analysis)")
+            
+            bias_result = subprocess.run([
+                sys.executable, "call_api_bias_optimized.py", 
+                "--input", str(jsonl_file_path),
+                "--output", str(output_dir),
+                "--max-concurrent", "30",
+                "--batch-size", "50"
+            ], capture_output=True, text=True, cwd=scripts_dir, timeout=1800)  # Increased timeout for full processing
+        else:
+            # Process limited number of paragraphs based on LLM call limit
+            max_paragraphs_for_bias = max_calls if max_calls else 10  # Default to 10 if no limit specified
+            
+            st.info(f"Bias analysis will process up to {max_paragraphs_for_bias} paragraphs using {max_calls} LLM calls (limited processing)")
+            
+            bias_result = subprocess.run([
+                sys.executable, "call_api_bias_optimized.py", 
+                "--input", str(jsonl_file_path),
+                "--output", str(output_dir),
+                "--max-paragraphs", str(max_paragraphs_for_bias),
+                "--max-concurrent", "30",
+                "--batch-size", "50",
+                "--max-llm-calls", str(max_calls)
+            ], capture_output=True, text=True, cwd=scripts_dir, timeout=900)
         
         if bias_result.returncode != 0:
-            return False, f"Bias analysis failed: {bias_result.stderr}"
+            error_msg = f"Bias analysis failed: {bias_result.stderr}"
+            if "timeout" in error_msg.lower():
+                error_msg += "\n\nTip: Try reducing the number of LLM calls or increasing the timeout."
+            return False, error_msg
         
         # Check for bias analysis results
         bias_output_file = output_dir / "text_bias_analysis_results.jsonl"
+        bias_summary_file = output_dir / "text_bias_analysis_results_summary.json"
+        
         if bias_output_file.exists():
             st.success("Bias analysis completed successfully!")
+            
+            # Try to load and display summary if available
+            if bias_summary_file.exists():
+                try:
+                    with open(bias_summary_file, 'r') as f:
+                        summary = json.load(f)
+                    st.info(f"Processed {summary.get('total_paragraphs_processed', 0)} paragraphs using {summary.get('total_llm_calls_used', 0)} LLM calls")
+                except Exception as e:
+                    st.warning(f"Could not load bias analysis summary: {e}")
+            
             return True, str(bias_output_file)
         else:
             return False, "Bias analysis completed but no results file found"
@@ -384,9 +428,9 @@ def display_ai_analysis_results(ai_file_path):
         st.info(f"Debug: Error details: {str(e)}")
 
 def display_bias_results(bias_file_path):
-    """Display bias analysis results with simple histogram"""
+    """Display comprehensive bias analysis results with 3 main tabs"""
     try:
-        st.markdown("**Bias Analysis Results**")
+        st.markdown("**🔍 Bias Analysis Results**")
         
         # Load bias analysis data
         bias_data = []
@@ -399,129 +443,310 @@ def display_bias_results(bias_file_path):
             st.warning("No bias analysis data found")
             return
         
-        st.success(f"Found {len(bias_data)} bias analysis entries")
+        # Load summary if available
+        summary_file = Path(bias_file_path).parent / "text_bias_analysis_results_summary.json"
+        summary = {}
+        if summary_file.exists():
+            with open(summary_file, 'r') as f:
+                summary = json.load(f)
         
-        # Display bias data with proper field mapping
-        for i, entry in enumerate(bias_data[:10]):  # Show first 10 entries
-            with st.expander(f"Entry {i+1}: {entry.get('paragraph_id', 'Unknown')}"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**Text Snippet**")
-                    text_content = entry.get('text', 'No text available')
-                    if len(text_content) > 200:
-                        st.text(text_content[:200] + "...")
-                    else:
-                        st.text(text_content)
-                    
-                    st.markdown("**🏷️ Bias Type**")
-                    bias_flag = entry.get('bias_flag', 'Unknown')
-                    if bias_flag == 'none':
-                        st.success("No bias detected")
-                    elif bias_flag == 'framing':
-                        st.warning("Framing bias detected")
-                    elif bias_flag == 'selection':
-                        st.warning("Selection bias detected")
-                    elif bias_flag == 'omission':
-                        st.warning("Omission bias detected")
-                    else:
-                        st.info(bias_flag)
-                    
-                    st.markdown("**Core Actors**")
-                    actors = entry.get('core_actors', [])
-                    if actors:
-                        for actor in actors:
-                            st.write(f"• {actor}")
-                    else:
-                        st.write("No actors identified")
-                
-                with col2:
-                    st.markdown("**Bias Analysis**")
-                    bias_reason = entry.get('bias_reason', 'No analysis available')
-                    st.text(bias_reason[:300] + "..." if len(bias_reason) > 300 else bias_reason)
-                    
-                    st.markdown("**Violation Types**")
-                    violations = entry.get('violation_type', [])
-                    if violations:
-                        for violation in violations:
-                            st.write(f"• {violation}")
-                    else:
-                        st.write("No violations identified")
-                    
-                    st.markdown("**📍 Location**")
-                    location = entry.get('location', 'Not specified')
-                    st.info(location)
+        # Display key metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Total Paragraphs", summary.get('total_paragraphs_processed', len(bias_data)))
+        with col2:
+            st.metric("🤖 LLM Calls Used", summary.get('total_llm_calls_used', 'N/A'))
+        with col3:
+            st.metric("⏱️ Processing Time", f"{summary.get('processing_time_minutes', 0):.2f} min")
+        with col4:
+            avg_time = summary.get('average_time_per_paragraph', 0)
+            st.metric("⚡ Avg Time/Paragraph", f"{avg_time:.2f}s")
         
-        # Summary statistics with simple histogram
-        st.markdown("**Bias Analysis Summary**")
+        st.success(f"✅ Successfully analyzed {len(bias_data)} paragraphs")
         
-        # Count bias types
-        bias_counts = {}
-        for entry in bias_data:
-            bias_type = entry.get('bias_flag', 'unknown')
-            bias_counts[bias_type] = bias_counts.get(bias_type, 0) + 1
+        # Create the 3 main tabs as requested
+        tab1, tab2, tab3 = st.tabs(["📊 Dataset Overview", "📋 Detailed Results", "📈 Bias Analysis Summary"])
         
-        if bias_counts:
-            # Show bias distribution as a simple histogram
-            st.markdown("**Bias Category Distribution**")
+        with tab1:
+            st.markdown("**📊 Dataset Overview**")
             
-            # Create histogram chart
-            try:
-                import plotly.express as px
-                df_bias = pd.DataFrame(list(bias_counts.items()), columns=['Bias Type', 'Count'])
-                
-                # Create histogram
-                fig = px.bar(
-                    df_bias,
-                    x='Bias Type',
-                    y='Count',
-                    title="Bias Categories Distribution",
-                    labels={'x': 'Bias Type', 'y': 'Count'},
-                    color='Count',
-                    color_continuous_scale='viridis'
-                )
-                fig.update_layout(
-                    xaxis_tickangle=-45,
-                    showlegend=False,
-                    height=400
-                )
-                fig.update_traces(
-                    text=df_bias['Count'],
-                    textposition='outside'
-                )
-                st.plotly_chart(fig, use_container_width=True, key=f"value_distribution_chart_{id(fig)}")
-                
-                # Simple text summary below the chart
-                st.markdown("**Summary:**")
-                for bias_type, count in bias_counts.items():
-                    if bias_type == 'none':
-                        st.write(f"• **No Bias Detected**: {count} paragraphs")
-                    else:
-                        st.write(f"• **{bias_type.title()} Bias**: {count} paragraphs")
+            # Dataset statistics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Paragraphs", len(bias_data))
+            with col2:
+                bias_types = set(entry.get('bias_flag', 'unknown') for entry in bias_data)
+                st.metric("Bias Types Found", len(bias_types))
+            with col3:
+                total_actors = set()
+                for entry in bias_data:
+                    actors = entry.get('core_actors', [])
+                    total_actors.update(actors)
+                st.metric("Unique Actors", len(total_actors))
+            
+            # Bias type distribution
+            st.markdown("**Bias Type Distribution**")
+            bias_counts = {}
+            for entry in bias_data:
+                bias_type = entry.get('bias_flag', 'unknown')
+                bias_counts[bias_type] = bias_counts.get(bias_type, 0) + 1
+            
+            if bias_counts:
+                try:
+                    import plotly.express as px
+                    df_bias = pd.DataFrame(list(bias_counts.items()), columns=['Bias Type', 'Count'])
+                    
+                    fig = px.pie(
+                        df_bias, 
+                        values='Count', 
+                        names='Bias Type',
+                        title="Bias Type Distribution",
+                        color_discrete_sequence=px.colors.qualitative.Set3
+                    )
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Summary table
+                    st.markdown("**Summary Table**")
+                    st.dataframe(df_bias, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Error creating chart: {e}")
+                    # Fallback to simple display
+                    for bias_type, count in bias_counts.items():
+                        st.write(f"• **{bias_type.title()}**: {count} paragraphs")
+            
+            # Top actors
+            st.markdown("**Most Frequently Mentioned Actors**")
+            actor_counts = {}
+            for entry in bias_data:
+                actors = entry.get('core_actors', [])
+                for actor in actors:
+                    actor_counts[actor] = actor_counts.get(actor, 0) + 1
+            
+            if actor_counts:
+                top_actors = sorted(actor_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                for actor, count in top_actors:
+                    st.write(f"• **{actor}**: {count} mentions")
+        
+        with tab2:
+            st.markdown("**📋 Detailed Results - All Text Captured**")
+            
+            # Option to show subset or all results
+            show_all = st.checkbox("Show all paragraphs (may be slow for large datasets)", value=False)
+            
+            if show_all:
+                paragraphs_to_show = bias_data
+                st.info(f"Showing all {len(paragraphs_to_show)} paragraphs")
+            else:
+                paragraphs_to_show = bias_data[:10]
+                st.info(f"Showing first 10 paragraphs (check 'Show all' to see all {len(bias_data)} paragraphs)")
+            
+            for i, entry in enumerate(paragraphs_to_show):
+                with st.expander(f"📄 Paragraph {entry.get('paragraph_id', 'Unknown')} - {entry.get('bias_flag', 'Unknown').title()} Bias"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**📝 Full Text Content**")
+                        text_content = entry.get('text', 'No text available')
+                        # Show full text without truncation
+                        st.text_area("", text_content, height=150, key=f"full_text_{i}")
                         
-            except ImportError:
-                st.info("Plotly not available for charts - showing text summary only")
-                for bias_type, count in bias_counts.items():
-                    if bias_type == 'none':
-                        st.success(f"No Bias: {count}")
-                    else:
-                        st.warning(f"{bias_type.title()}: {count}")
+                        st.markdown("**🏷️ Bias Classification**")
+                        bias_flag = entry.get('bias_flag', 'Unknown')
+                        if bias_flag == 'none':
+                            st.success("✅ No bias detected")
+                        elif bias_flag == 'framing':
+                            st.warning("⚠️ Framing bias detected")
+                        elif bias_flag == 'selection':
+                            st.warning("⚠️ Selection bias detected")
+                        elif bias_flag == 'omission':
+                            st.warning("⚠️ Omission bias detected")
+                        else:
+                            st.info(f"ℹ️ {bias_flag}")
+                        
+                        st.markdown("**👥 Core Actors**")
+                        actors = entry.get('core_actors', [])
+                        if actors:
+                            for actor in actors:
+                                st.write(f"• {actor}")
+                        else:
+                            st.write("No actors identified")
+                    
+                    with col2:
+                        st.markdown("**🔍 Full Bias Analysis**")
+                        bias_reason = entry.get('bias_reason', 'No analysis available')
+                        # Show full analysis without truncation
+                        st.text_area("", bias_reason, height=150, key=f"full_reason_{i}")
+                        
+                        st.markdown("**⚖️ Violation Types**")
+                        violations = entry.get('violation_type', [])
+                        if violations:
+                            for violation in violations:
+                                st.write(f"• {violation}")
+                        else:
+                            st.write("No violations identified")
+                        
+                        st.markdown("**📍 Location & Date**")
+                        location = entry.get('location', 'Not specified')
+                        date = entry.get('occurrence_date', 'Not specified')
+                        st.info(f"📍 {location}")
+                        st.info(f"📅 {date}")
+                        
+                        # Show Entman framing analysis if available
+                        entman_analysis = entry.get('entman_framing_analysis', {})
+                        if entman_analysis:
+                            st.markdown("**🎯 Entman Framing Analysis**")
+                            for key, value in entman_analysis.items():
+                                if value:
+                                    st.write(f"• **{key.replace('_', ' ').title()}**: {value}")
         
-        # Download bias results
-        with open(bias_file_path, 'r', encoding='utf-8') as f:
-            bias_content = f.read()
-        
-        st.download_button(
-            label="Download Bias Analysis (JSONL)",
-            data=bias_content,
-            file_name="bias_analysis_results.jsonl",
-            mime="application/json"
-        )
+        with tab3:
+            st.markdown("**📈 Bias Analysis Summary - Graphs & Analytics**")
+            
+            # Bias type distribution chart
+            st.markdown("**Bias Type Distribution**")
+            bias_counts = {}
+            for entry in bias_data:
+                bias_type = entry.get('bias_flag', 'unknown')
+                bias_counts[bias_type] = bias_counts.get(bias_type, 0) + 1
+            
+            if bias_counts:
+                try:
+                    import plotly.express as px
+                    df_bias = pd.DataFrame(list(bias_counts.items()), columns=['Bias Type', 'Count'])
+                    
+                    # Create bar chart
+                    fig = px.bar(
+                        df_bias,
+                        x='Bias Type',
+                        y='Count',
+                        title="Bias Categories Distribution",
+                        labels={'x': 'Bias Type', 'y': 'Count'},
+                        color='Count',
+                        color_continuous_scale='viridis'
+                    )
+                    fig.update_layout(
+                        xaxis_tickangle=-45,
+                        showlegend=False,
+                        height=400
+                    )
+                    fig.update_traces(
+                        text=df_bias['Count'],
+                        textposition='outside'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Error creating chart: {e}")
+            
+            # Actor analysis
+            st.markdown("**Actor Analysis**")
+            actor_counts = {}
+            for entry in bias_data:
+                actors = entry.get('core_actors', [])
+                for actor in actors:
+                    actor_counts[actor] = actor_counts.get(actor, 0) + 1
+            
+            if actor_counts:
+                # Show top 10 actors
+                top_actors = sorted(actor_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                df_actors = pd.DataFrame(top_actors, columns=['Actor', 'Mentions'])
+                
+                try:
+                    fig = px.bar(
+                        df_actors,
+                        x='Mentions',
+                        y='Actor',
+                        orientation='h',
+                        title="Top 10 Most Mentioned Actors",
+                        color='Mentions',
+                        color_continuous_scale='blues'
+                    )
+                    fig.update_layout(height=400)
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error creating actor chart: {e}")
+                
+                # Actor table
+                st.markdown("**Actor Mentions Table**")
+                st.dataframe(df_actors, use_container_width=True)
+            
+            # Violation type analysis
+            st.markdown("**Violation Type Analysis**")
+            violation_counts = {}
+            for entry in bias_data:
+                violations = entry.get('violation_type', [])
+                for violation in violations:
+                    violation_counts[violation] = violation_counts.get(violation, 0) + 1
+            
+            if violation_counts:
+                top_violations = sorted(violation_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                df_violations = pd.DataFrame(top_violations, columns=['Violation Type', 'Count'])
+                
+                try:
+                    fig = px.pie(
+                        df_violations,
+                        values='Count',
+                        names='Violation Type',
+                        title="Top 10 Violation Types",
+                        color_discrete_sequence=px.colors.qualitative.Set2
+                    )
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error creating violation chart: {e}")
+                
+                # Violation table
+                st.markdown("**Violation Types Table**")
+                st.dataframe(df_violations, use_container_width=True)
+            
+            # Location analysis
+            st.markdown("**Location Analysis**")
+            location_counts = {}
+            for entry in bias_data:
+                location = entry.get('location', 'Not specified')
+                if location and location != 'Not specified':
+                    location_counts[location] = location_counts.get(location, 0) + 1
+            
+            if location_counts:
+                top_locations = sorted(location_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+                df_locations = pd.DataFrame(top_locations, columns=['Location', 'Count'])
+                
+                st.markdown("**Top Locations**")
+                st.dataframe(df_locations, use_container_width=True)
+            
+            # Summary statistics
+            st.markdown("**📊 Summary Statistics**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Total Bias Cases", sum(1 for entry in bias_data if entry.get('bias_flag') != 'none'))
+            with col2:
+                st.metric("Framing Bias", sum(1 for entry in bias_data if entry.get('bias_flag') == 'framing'))
+            with col3:
+                st.metric("Selection Bias", sum(1 for entry in bias_data if entry.get('bias_flag') == 'selection'))
+            with col4:
+                st.metric("Omission Bias", sum(1 for entry in bias_data if entry.get('bias_flag') == 'omission'))
         
     except Exception as e:
         st.error(f"Error displaying bias results: {e}")
         st.info(f"Debug: File path: {bias_file_path}")
         st.info(f"Debug: Error details: {str(e)}")
+        
+        # Download bias results
+        try:
+            with open(bias_file_path, 'r', encoding='utf-8') as f:
+                bias_content = f.read()
+            
+            st.download_button(
+                label="Download Bias Analysis (JSONL)",
+                data=bias_content,
+                file_name="bias_analysis_results.jsonl",
+                mime="application/json"
+            )
+        except Exception as download_error:
+            st.warning(f"Could not prepare download: {download_error}")
 
 def display_results(data, output_dir):
     """Display the extraction results with rich visualizations"""
@@ -881,49 +1106,70 @@ def main():
         with col2:
             st.text(f"Type: {uploaded_file.type}")
         
-        # Bias analysis option
+        # Analysis options
         st.markdown("**Analysis Configuration**")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            include_bias_analysis = st.checkbox(
-                "Include Bias Analysis",
-                help="Enable this to also analyze the report for bias, framing, and language patterns. This will add additional processing time but provide deeper insights."
+            include_quantitative = st.checkbox(
+                "Include Quantitative Extraction",
+                value=True,
+                help="Extract quantitative data (violations, actors, locations, dates) from the report. This is the core analysis."
             )
             
+            include_bias_analysis = st.checkbox(
+                "Include Bias Analysis",
+                help="Analyze the report for bias, framing, and language patterns using Entman's theory. Provides deeper insights into reporting bias."
+            )
+        
+        with col2:
             include_ai_agent = st.checkbox(
                 "Include AI Agent Analysis",
-                help="Enable this to get comprehensive AI-powered analysis combining quantitative data and bias analysis. Requires bias analysis to be enabled."
+                help="Get comprehensive AI-powered analysis combining quantitative data and bias analysis. Requires at least one analysis type to be enabled."
             )
+            
+            # Show bias analysis specific options
+            if include_bias_analysis:
+                st.markdown("**Bias Analysis Options**")
+                process_all_paragraphs = st.checkbox(
+                    "Process All Paragraphs",
+                    value=True,
+                    help="Process all paragraphs in the report (recommended for comprehensive analysis). Uncheck to limit processing."
+                )
         
         # Note: Interactive AI Chat is always available after analysis
         st.info("**Interactive AI Chat will be available after analysis completion**")
         
-        # LLM Call Configuration
-        st.markdown("**LLM Call Configuration**")
-        
-        # Simple preset selection
-        call_presets = {
-            "Ultra-Fast (1-2 calls)": {"min": 1, "max": 2},
-            "Fast (3-5 calls)": {"min": 3, "max": 5},
-            "Standard (6-8 calls)": {"min": 6, "max": 8},
-            "Research (9-15 calls)": {"min": 9, "max": 15},
-            "Custom": {"min": 1, "max": 20}
-        }
-        
-        selected_preset = st.selectbox("Strategy:", list(call_presets.keys()))
-        
-        if selected_preset == "Custom":
-            col1, col2 = st.columns(2)
-            with col1:
-                min_calls = st.slider("Min calls:", 1, 20, 3)
-            with col2:
-                max_calls = st.slider("Max calls:", min_calls, 20, 5)
+        # LLM Call Configuration (for quantitative extraction)
+        if include_quantitative:
+            st.markdown("**LLM Call Configuration (Quantitative Extraction)**")
+            
+            # Simple preset selection
+            call_presets = {
+                "Ultra-Fast (1-2 calls)": {"min": 1, "max": 2},
+                "Fast (3-5 calls)": {"min": 3, "max": 5},
+                "Standard (6-8 calls)": {"min": 6, "max": 8},
+                "Research (9-15 calls)": {"min": 9, "max": 15},
+                "Custom": {"min": 1, "max": 20}
+            }
+            
+            selected_preset = st.selectbox("Quantitative Strategy:", list(call_presets.keys()))
+            
+            if selected_preset == "Custom":
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_calls = st.slider("Min calls:", 1, 20, 3)
+                with col2:
+                    max_calls = st.slider("Max calls:", min_calls, 20, 5)
+            else:
+                preset = call_presets[selected_preset]
+                min_calls = preset["min"]
+                max_calls = preset["max"]
         else:
-            preset = call_presets[selected_preset]
-            min_calls = preset["min"]
-            max_calls = preset["max"]
+            # Default values when quantitative extraction is disabled
+            min_calls = 3
+            max_calls = 5
         
         # Simple estimates
         avg_calls = (min_calls + max_calls) / 2
@@ -951,24 +1197,31 @@ def main():
                     st.info(f"Processing {uploaded_file.name}...")
                     
                     # Run extraction
-                    success, output = run_fast_path_extraction(uploaded_file, temp_path, include_bias_analysis, min_calls, max_calls)
+                    success, output = run_fast_path_extraction(
+                        uploaded_file, temp_path, 
+                        include_quantitative=include_quantitative,
+                        include_bias_analysis=include_bias_analysis,
+                        process_all_paragraphs=process_all_paragraphs if include_bias_analysis else True,
+                        min_calls=min_calls, max_calls=max_calls
+                    )
                     
                     if success and isinstance(output, dict):
                         # Store results in session state (for potential future use)
                         st.session_state.analysis_results = output
                         
-                        # Apply data normalization
-                        quant_file = output.get('quantitative_file')
-                        if quant_file and os.path.exists(quant_file):
-                            normalized_file = os.path.join(os.path.dirname(quant_file), 'normalized_extraction_results.jsonl')
-                            normalization_result = normalize_extracted_data(str(quant_file), str(normalized_file))
-                            
-                            if normalization_result['success']:
-                                st.success(normalization_result['message'])
-                                # Update the output to use normalized file
-                                output['quantitative_file'] = normalized_file
-                            else:
-                                st.warning(f"Normalization failed: {normalization_result['message']}")
+                        # Apply data normalization (only if quantitative extraction was enabled)
+                        if include_quantitative:
+                            quant_file = output.get('quantitative_file')
+                            if quant_file and os.path.exists(quant_file):
+                                normalized_file = os.path.join(os.path.dirname(quant_file), 'normalized_extraction_results.jsonl')
+                                normalization_result = normalize_extracted_data(str(quant_file), str(normalized_file))
+                                
+                                if normalization_result['success']:
+                                    st.success(normalization_result['message'])
+                                    # Update the output to use normalized file
+                                    output['quantitative_file'] = normalized_file
+                                else:
+                                    st.warning(f"Normalization failed: {normalization_result['message']}")
                         
                         # Display results
                         display_results(output, temp_path)
@@ -985,22 +1238,24 @@ def main():
                                 if include_ai_agent:
                                     st.markdown("**AI Agent Analysis**")
                                     
-                                    # Get the quantitative results file path
-                                    quantitative_file_path = output.get('quantitative_dir')
-                                    if quantitative_file_path:
-                                        quantitative_file = Path(quantitative_file_path) / "ultra_fast_extraction_results.jsonl"
-                                        if quantitative_file.exists():
-                                            ai_success, ai_output = run_ai_analysis(quantitative_file, bias_file_path, temp_path)
-                                            
-                                            if ai_success:
-                                                display_ai_analysis_results(ai_output)
-                                                st.session_state.ai_analysis_results = ai_output
-                                            else:
-                                                st.error(f"AI analysis failed: {ai_output}")
-                                        else:
-                                            st.error("Quantitative results file not found for AI analysis")
+                                    # Get the quantitative results file path (if quantitative extraction was enabled)
+                                    quantitative_file = None
+                                    if include_quantitative:
+                                        quantitative_file_path = output.get('quantitative_dir')
+                                        if quantitative_file_path:
+                                            quantitative_file = Path(quantitative_file_path) / "ultra_fast_extraction_results.jsonl"
+                                            if not quantitative_file.exists():
+                                                st.warning("Quantitative results file not found for AI analysis")
+                                                quantitative_file = None
+                                    
+                                    # Run AI analysis with available data
+                                    ai_success, ai_output = run_ai_analysis(quantitative_file, bias_file_path, temp_path)
+                                    
+                                    if ai_success:
+                                        display_ai_analysis_results(ai_output)
+                                        st.session_state.ai_analysis_results = ai_output
                                     else:
-                                        st.error("Quantitative directory path not found")
+                                        st.error(f"AI analysis failed: {ai_output}")
                             else:
                                 st.error("Bias analysis path not found in output")
                         elif include_bias_analysis:
@@ -1049,6 +1304,13 @@ def main():
     # Bias analysis is in its own directory, AI analysis might be in quantitative_extraction
     bias_file = project_root / "extraction" / "universal_output" / "bias_analysis" / "text_bias_analysis_results.jsonl"
     ai_file = project_root / "extraction" / "universal_output" / "quantitative_extraction" / "ai_analysis_report.json"
+    
+    # Show bias analysis results if available
+    if bias_file.exists():
+        st.markdown("---")
+        st.markdown('<h2 class="section-header">🔍 Bias Analysis Results</h2>', unsafe_allow_html=True)
+        st.markdown("Comprehensive bias analysis using Entman's framing theory and advanced AI techniques.")
+        display_bias_results(bias_file)
     
     # ALWAYS show AI agent - it will work with whatever files are available
     st.markdown("---")
@@ -1108,6 +1370,11 @@ def main():
         - What are the limitations of this bias analysis?
         - Which UNSCR 1701 articles are most frequently violated?
         - How does the selection bias manifest in this report?
+        - What framing bias indicators were detected?
+        - How does the language analysis reveal bias patterns?
+        - Which paragraphs show the strongest evidence of omission bias?
+        - Can you analyze the moral evaluation patterns in the framing?
+        - What systemic bias indicators were found?
                  """)
 
     # Professional footer
