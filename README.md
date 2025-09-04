@@ -8,7 +8,7 @@ A comprehensive analysis pipeline that leverages artificial intelligence to extr
 
 ### Prerequisites
 - Python 3.8+
-- OpenAI API key
+- OpenAI API key (you'll enter this in the app)
 - 4GB+ RAM recommended
 
 ### Installation
@@ -23,10 +23,28 @@ source bias_env2/bin/activate  # On Windows: bias_env2\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Set up API key
-echo "OPENAI_API_KEY=your_key_here" > .env
 ```
+
+### Getting Your OpenAI API Key
+1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Create an account or sign in
+3. Generate a new API key
+4. **Important**: Keep your API key secure and never share it publicly
+
+### Running the Application
+```bash
+# Launch the UI
+cd UI
+streamlit run app.py
+```
+
+**Note**: You'll be prompted to enter your OpenAI API key in the sidebar when you first run the app. Your key is stored locally for the session and never shared.
+
+### Cost Information
+- **Fast Path Analysis**: ~$0.01-0.03 per document
+- **With Bias Analysis**: ~$0.05-0.15 per document  
+- **AI Agent Questions**: ~$0.01-0.05 per question
+- **Your API key = Your costs** - No hidden fees or charges from this application
 
 ### First Run
 ```bash

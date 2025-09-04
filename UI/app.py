@@ -26,6 +26,53 @@ st.set_page_config(
     layout="wide"
 )
 
+# API Key Configuration
+st.sidebar.markdown("## 🔑 OpenAI API Configuration")
+st.sidebar.markdown("**Required for LLM-powered analysis**")
+
+# Check if API key is already set in environment
+existing_key = os.getenv('OPENAI_API_KEY', '')
+if existing_key:
+    st.sidebar.success("✅ API key found in environment")
+    api_key = existing_key
+else:
+    # Get API key from user
+    api_key = st.sidebar.text_input(
+        "Enter your OpenAI API Key:",
+        type="password",
+        help="Get your API key from https://platform.openai.com/api-keys"
+    )
+    
+    if not api_key:
+        st.sidebar.warning("⚠️ API key required to use LLM features")
+        st.sidebar.markdown("""
+        **To get started:**
+        1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+        2. Create an API key
+        3. Enter it above
+        4. Your key is stored locally and never shared
+        """)
+        st.stop()
+    else:
+        # Set the API key in environment for this session
+        os.environ['OPENAI_API_KEY'] = api_key
+        st.sidebar.success("✅ API key configured for this session")
+    
+    # Cost estimation
+    with st.sidebar.expander("💰 Cost Estimation", expanded=False):
+        st.markdown("""
+        **Typical costs per analysis:**
+        - **Fast Path (≤3 calls)**: ~$0.01-0.03
+        - **With Bias Analysis**: ~$0.05-0.15
+        - **With AI Agent**: ~$0.01-0.05 per question
+        
+        **Model Pricing:**
+        - GPT-4o: $5/1M input tokens, $15/1M output tokens
+        - GPT-4o-mini: $0.15/1M input tokens, $0.60/1M output tokens
+        
+        *Costs are estimates and may vary based on document size and complexity.*
+        """)
+
 # Minimalistic CSS styling
 st.markdown("""
 <style>
