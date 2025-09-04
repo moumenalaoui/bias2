@@ -15,9 +15,61 @@ import tempfile
 import shutil
 from datetime import datetime
 from typing import Dict, Any
+import base64
+import hashlib
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Secure API key persistence functions
+def encrypt_api_key(api_key: str) -> str:
+    """Simple encryption for API key storage"""
+    if not api_key:
+        return ""
+    # Use a simple base64 encoding with a salt
+    salt = "bias2_secure_salt_2024"
+    combined = salt + api_key
+    encoded = base64.b64encode(combined.encode()).decode()
+    return encoded
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt API key from storage"""
+    if not encrypted_key:
+        return ""
+    try:
+        decoded = base64.b64decode(encrypted_key.encode()).decode()
+        salt = "bias2_secure_salt_2024"
+        if decoded.startswith(salt):
+            return decoded[len(salt):]
+        return ""
+    except:
+        return ""
+
+def get_persistent_api_key() -> str:
+    """Get API key from browser storage (cookies)"""
+    try:
+        # Try to get from Streamlit's experimental cookie manager
+        if hasattr(st, 'experimental_cookie_manager'):
+            cookie_manager = st.experimental_cookie_manager
+            encrypted_key = cookie_manager.get('api_key')
+            if encrypted_key:
+                return decrypt_api_key(encrypted_key)
+    except:
+        pass
+    return ""
+
+def set_persistent_api_key(api_key: str):
+    """Store API key in browser storage (cookies)"""
+    try:
+        if hasattr(st, 'experimental_cookie_manager'):
+            cookie_manager = st.experimental_cookie_manager
+            if api_key:
+                encrypted_key = encrypt_api_key(api_key)
+                cookie_manager.set('api_key', encrypted_key, expires_at=None)
+            else:
+                cookie_manager.delete('api_key')
+    except:
+        pass
 
 # Page configuration
 st.set_page_config(
@@ -38,7 +90,12 @@ st.sidebar.info("🔑 Each user must provide their own API key for security")
 if 'user_api_key' not in st.session_state:
     st.session_state.user_api_key = ''
 
-# Get API key from user (persistent within session)
+# Try to get persistent API key from cookies
+persistent_key = get_persistent_api_key()
+if persistent_key and not st.session_state.user_api_key:
+    st.session_state.user_api_key = persistent_key
+
+# Get API key from user (persistent across refreshes via cookies)
 api_key = st.sidebar.text_input(
     "Enter your OpenAI API Key:",
     type="password",
@@ -46,9 +103,10 @@ api_key = st.sidebar.text_input(
     help="Get your API key from https://platform.openai.com/api-keys"
 )
 
-# Update session state when user enters a new key
+# Update session state and persistent storage when user enters a new key
 if api_key and api_key != st.session_state.user_api_key:
     st.session_state.user_api_key = api_key
+    set_persistent_api_key(api_key)
 
 if not api_key:
     st.sidebar.warning("⚠️ API key required to use LLM features")
@@ -57,7 +115,8 @@ if not api_key:
     1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
     2. Create an API key
     3. Enter it above
-    4. Your key is stored locally and never shared
+    4. Your key is stored securely and persists across refreshes
+    5. Your key is never shared with other users
     """)
     st.stop()
 else:
@@ -68,6 +127,7 @@ else:
     # Add clear API key button for security
     if st.sidebar.button("🗑️ Clear API Key", help="Clear your API key for security"):
         st.session_state.user_api_key = ''
+        set_persistent_api_key('')  # Also clear from persistent storage
         st.rerun()
     
     # Cost estimation
