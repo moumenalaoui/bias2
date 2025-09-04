@@ -32,10 +32,16 @@ st.sidebar.markdown("**Required for LLM-powered analysis**")
 
 # Check if API key is already set in environment
 existing_key = os.getenv('OPENAI_API_KEY', '')
-if existing_key:
+# Only consider it valid if it looks like a real API key (starts with 'sk-' and has reasonable length)
+if existing_key and existing_key.startswith('sk-') and len(existing_key) > 20:
     st.sidebar.success("✅ API key found in environment")
     api_key = existing_key
 else:
+    # Debug info for Streamlit Cloud
+    if existing_key:
+        st.sidebar.info(f"🔍 Environment variable detected but invalid (length: {len(existing_key)})")
+    else:
+        st.sidebar.info("🔍 No API key found in environment")
     # Get API key from user
     api_key = st.sidebar.text_input(
         "Enter your OpenAI API Key:",
