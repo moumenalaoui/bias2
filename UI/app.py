@@ -468,66 +468,63 @@ def display_bias_results(bias_file_path):
         tab1, tab2, tab3 = st.tabs(["📊 Dataset Overview", "📋 Detailed Results", "📈 Bias Analysis Summary"])
         
         with tab1:
-            st.markdown("**📊 Dataset Overview**")
+            st.markdown("**📊 Dataset Overview - CSV Table**")
             
-            # Dataset statistics
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Paragraphs", len(bias_data))
-            with col2:
-                bias_types = set(entry.get('bias_flag', 'unknown') for entry in bias_data)
-                st.metric("Bias Types Found", len(bias_types))
-            with col3:
-                total_actors = set()
+            # Convert bias data to DataFrame for CSV display
+            try:
+                import pandas as pd
+                
+                # Create a simplified DataFrame with key columns
+                csv_data = []
                 for entry in bias_data:
-                    actors = entry.get('core_actors', [])
-                    total_actors.update(actors)
-                st.metric("Unique Actors", len(total_actors))
-            
-            # Bias type distribution
-            st.markdown("**Bias Type Distribution**")
-            bias_counts = {}
-            for entry in bias_data:
-                bias_type = entry.get('bias_flag', 'unknown')
-                bias_counts[bias_type] = bias_counts.get(bias_type, 0) + 1
-            
-            if bias_counts:
-                try:
-                    import plotly.express as px
-                    df_bias = pd.DataFrame(list(bias_counts.items()), columns=['Bias Type', 'Count'])
-                    
-                    fig = px.pie(
-                        df_bias, 
-                        values='Count', 
-                        names='Bias Type',
-                        title="Bias Type Distribution",
-                        color_discrete_sequence=px.colors.qualitative.Set3
-                    )
-                    fig.update_traces(textposition='inside', textinfo='percent+label')
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Summary table
-                    st.markdown("**Summary Table**")
-                    st.dataframe(df_bias, use_container_width=True)
-                    
-                except Exception as e:
-                    st.error(f"Error creating chart: {e}")
-                    # Fallback to simple display
-                    for bias_type, count in bias_counts.items():
-                        st.write(f"• **{bias_type.title()}**: {count} paragraphs")
-            
-            # Top actors
-            st.markdown("**Most Frequently Mentioned Actors**")
-            actor_counts = {}
-            for entry in bias_data:
-                actors = entry.get('core_actors', [])
-                for actor in actors:
-                    actor_counts[actor] = actor_counts.get(actor, 0) + 1
-            
-            if actor_counts:
-                top_actors = sorted(actor_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-                for actor, count in top_actors:
-                    st.write(f"• **{actor}**: {count} mentions")
+                    csv_row = {
+                        'paragraph_id': entry.get('paragraph_id', ''),
+                        'bias_flag': entry.get('bias_flag', ''),
+                        'bias_reason': entry.get('bias_reason', '')[:200] + '...' if len(entry.get('bias_reason', '')) > 200 else entry.get('bias_reason', ''),
+                        'core_actors': ', '.join(entry.get('core_actors', [])),
+                        'violation_type': ', '.join(entry.get('violation_type', [])),
+                        'location': entry.get('location', ''),
+                        'occurrence_date': entry.get('occurrence_date', ''),
+                        'text_preview': entry.get('text', '')[:100] + '...' if len(entry.get('text', '')) > 100 else entry.get('text', '')
+                    }
+                    csv_data.append(csv_row)
+                
+                df_csv = pd.DataFrame(csv_data)
+                
+                # Display the CSV table
+                st.markdown("**Bias Analysis Results Table**")
+                st.dataframe(df_csv, use_container_width=True, height=400)
+                
+                # Download CSV button
+                csv_string = df_csv.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_string,
+                    file_name="bias_analysis_results.csv",
+                    mime="text/csv"
+                )
+                
+                # Quick statistics
+                st.markdown("**Quick Statistics**")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Rows", len(df_csv))
+                with col2:
+                    bias_types = df_csv['bias_flag'].nunique()
+                    st.metric("Bias Types", bias_types)
+                with col3:
+                    total_actors = len(set([actor for actors in df_csv['core_actors'] if actors for actor in actors.split(', ')]))
+                    st.metric("Unique Actors", total_actors)
+                with col4:
+                    bias_cases = len(df_csv[df_csv['bias_flag'] != 'none'])
+                    st.metric("Bias Cases", bias_cases)
+                
+            except Exception as e:
+                st.error(f"Error creating CSV table: {e}")
+                # Fallback to simple display
+                st.markdown("**Raw Data Preview**")
+                for i, entry in enumerate(bias_data[:5]):
+                    st.write(f"**Entry {i+1}:** {entry.get('paragraph_id', 'Unknown')} - {entry.get('bias_flag', 'Unknown')}")
         
         with tab2:
             st.markdown("**📋 Detailed Results - All Text Captured**")
@@ -819,15 +816,19 @@ def display_results(data, output_dir):
     
     with perf_col1:
         llm_calls = data.get('llm_calls_used', 0)
-        max_llm_calls = 3
+        max_llm_calls = data.get('llm_calls_config', {}).get('max_calls', 3)
         st.metric("LLM Calls", f"{llm_calls}/{max_llm_calls}")
-        st.progress(llm_calls / max_llm_calls)
+        # Ensure progress value is between 0.0 and 1.0
+        progress_value = min(llm_calls / max_llm_calls, 1.0) if max_llm_calls > 0 else 0.0
+        st.progress(progress_value)
     
     with perf_col2:
         total_points = data.get('total_data_points', 0)
-        if total_points > 0:
+        if total_points > 0 and llm_calls > 0:
             points_per_call = total_points / llm_calls
             st.metric("Rate", f"{points_per_call:.1f} points/call")
+        else:
+            st.metric("Rate", "N/A")
     
     # Enhanced category chart
     if 'category_distribution' in data and data['category_distribution']:
@@ -928,13 +929,41 @@ def display_results(data, output_dir):
                             text_values = df[df['Value'].apply(lambda x: not str(x).replace('.', '').replace('-', '').isdigit())]
                             
                             if len(numeric_values) > 0:
-                                fig_hist = px.histogram(
-                                    numeric_values,
-                                    title="Numeric Values Distribution",
-                                    labels={'value': 'Value', 'count': 'Frequency'},
-                                    nbins=min(10, len(numeric_values))
+                                # Create normalized values plot
+                                import numpy as np
+                                
+                                # Normalize the values using min-max normalization
+                                min_val = numeric_values.min()
+                                max_val = numeric_values.max()
+                                normalized_values = (numeric_values - min_val) / (max_val - min_val) if max_val != min_val else numeric_values * 0
+                                
+                                # Create a scatter plot of normalized values
+                                fig_normalized = px.scatter(
+                                    x=range(len(normalized_values)),
+                                    y=normalized_values,
+                                    title="Normalized Values Distribution",
+                                    labels={'x': 'Data Point Index', 'y': 'Normalized Value (0-1)'},
+                                    color=normalized_values,
+                                    color_continuous_scale='viridis'
                                 )
-                                st.plotly_chart(fig_hist, use_container_width=True, key=f"value_histogram_chart_{id(fig_hist)}")
+                                fig_normalized.update_layout(
+                                    yaxis=dict(range=[0, 1]),
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_normalized, use_container_width=True, key=f"normalized_values_chart_{id(fig_normalized)}")
+                                
+                                # Also show a histogram of normalized values
+                                fig_hist_norm = px.histogram(
+                                    normalized_values,
+                                    title="Normalized Values Histogram",
+                                    labels={'value': 'Normalized Value', 'count': 'Frequency'},
+                                    nbins=min(10, len(normalized_values)),
+                                    color_discrete_sequence=['#2E8B57']
+                                )
+                                fig_hist_norm.update_layout(
+                                    xaxis=dict(range=[0, 1])
+                                )
+                                st.plotly_chart(fig_hist_norm, use_container_width=True, key=f"normalized_histogram_chart_{id(fig_hist_norm)}")
                                 
                                 if len(text_values) > 0:
                                     st.text(f"Text values: {len(text_values)}")
@@ -950,8 +979,120 @@ def display_results(data, output_dir):
                             st.metric("Text", len(text_values) if 'text_values' in locals() else 0)
                             st.metric("Sum", f"{numeric_values.sum():,}")
                             st.metric("Average", f"{numeric_values.mean():.1f}")
+                            
+                            # Normalized statistics
+                            st.markdown("**Normalized Stats**")
+                            st.metric("Min (Original)", f"{numeric_values.min():.1f}")
+                            st.metric("Max (Original)", f"{numeric_values.max():.1f}")
+                            st.metric("Avg (Normalized)", f"{normalized_values.mean():.3f}")
+                            st.metric("Std (Normalized)", f"{normalized_values.std():.3f}")
                         else:
                             st.text("No numeric data")
+                
+                # Violation Type Scatter Plots - Actual Numeric Values
+                st.markdown("**📊 Violation Type Scatter Plots - Actual Numeric Values**")
+                
+                # Extract numeric values by violation type
+                violation_data = {}
+                if 'Value' in df.columns and 'Category' in df.columns:
+                    for category in df['Category'].unique():
+                        if pd.notna(category):
+                            category_data = df[df['Category'] == category]
+                            numeric_values = pd.to_numeric(category_data['Value'], errors='coerce').dropna()
+                            if len(numeric_values) > 0:
+                                violation_data[category] = numeric_values
+                
+                if violation_data:
+                    # Create scatter plots for each violation type
+                    num_categories = len(violation_data)
+                    if num_categories <= 4:
+                        # Show all in one row if 4 or fewer categories
+                        cols = st.columns(num_categories)
+                        for i, (category, values) in enumerate(violation_data.items()):
+                            with cols[i]:
+                                fig_scatter = px.scatter(
+                                    x=range(len(values)),
+                                    y=values,
+                                    title=f"{category} Violations",
+                                    labels={'x': 'Data Point', 'y': 'Value'},
+                                    color=values,
+                                    color_continuous_scale='viridis'
+                                )
+                                fig_scatter.update_layout(
+                                    height=300,
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_scatter, use_container_width=True, key=f"violation_scatter_{category}_{id(fig_scatter)}")
+                                
+                                # Show summary stats
+                                st.caption(f"Count: {len(values)} | Avg: {values.mean():.1f} | Max: {values.max():.1f}")
+                    else:
+                        # Show in multiple rows if more than 4 categories
+                        for i, (category, values) in enumerate(violation_data.items()):
+                            if i % 2 == 0:
+                                cols = st.columns(2)
+                            
+                            with cols[i % 2]:
+                                fig_scatter = px.scatter(
+                                    x=range(len(values)),
+                                    y=values,
+                                    title=f"{category} Violations",
+                                    labels={'x': 'Data Point', 'y': 'Value'},
+                                    color=values,
+                                    color_continuous_scale='viridis'
+                                )
+                                fig_scatter.update_layout(
+                                    height=300,
+                                    showlegend=False
+                                )
+                                st.plotly_chart(fig_scatter, use_container_width=True, key=f"violation_scatter_{category}_{id(fig_scatter)}")
+                                
+                                # Show summary stats
+                                st.caption(f"Count: {len(values)} | Avg: {values.mean():.1f} | Max: {values.max():.1f}")
+                
+                # Combined violation comparison
+                if len(violation_data) > 1:
+                    st.markdown("**📈 Combined Violation Types Comparison**")
+                    
+                    # Create a combined scatter plot
+                    combined_data = []
+                    for category, values in violation_data.items():
+                        for i, value in enumerate(values):
+                            combined_data.append({
+                                'Category': category,
+                                'Value': value,
+                                'Index': i
+                            })
+                    
+                    if combined_data:
+                        df_combined = pd.DataFrame(combined_data)
+                        fig_combined = px.scatter(
+                            df_combined,
+                            x='Index',
+                            y='Value',
+                            color='Category',
+                            title="All Violation Types - Numeric Values Comparison",
+                            labels={'Index': 'Data Point Index', 'Value': 'Violation Value'},
+                            hover_data=['Category', 'Value']
+                        )
+                        fig_combined.update_layout(height=400)
+                        st.plotly_chart(fig_combined, use_container_width=True, key=f"combined_violations_{id(fig_combined)}")
+                        
+                        # Summary table
+                        st.markdown("**Summary by Violation Type**")
+                        summary_data = []
+                        for category, values in violation_data.items():
+                            summary_data.append({
+                                'Violation Type': category,
+                                'Count': len(values),
+                                'Average': f"{values.mean():.1f}",
+                                'Max': f"{values.max():.1f}",
+                                'Min': f"{values.min():.1f}",
+                                'Total': f"{values.sum():.1f}"
+                            })
+                        
+                        df_summary = pd.DataFrame(summary_data)
+                        st.dataframe(df_summary, use_container_width=True)
                 
                 # Actor analysis
                 if 'Actor' in df.columns:
@@ -1188,6 +1329,27 @@ def main():
         
         # Run extraction
         if st.button("Run Extraction"):
+            # Get project root directory
+            current_dir = Path.cwd()
+            project_root = current_dir.parent if current_dir.name == "UI" else current_dir
+            
+            # Clear previous session results and files
+            st.session_state.extraction_completed = False
+            st.session_state.analysis_results = None
+            st.session_state.bias_results = None
+            st.session_state.ai_analysis_results = None
+            st.session_state.ai_chat_history = []  # Clear AI chat history
+            
+            # Clear old output files
+            try:
+                import shutil
+                universal_output_dir = project_root / "extraction" / "universal_output"
+                if universal_output_dir.exists():
+                    shutil.rmtree(universal_output_dir)
+                    universal_output_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                st.warning(f"Could not clear old results: {e}")
+            
             with st.spinner("Processing..."):
                 # Create temporary directory
                 temp_dir = tempfile.mkdtemp(prefix=f"fast_path_{uploaded_file.name.replace('.pdf', '')}_")
@@ -1226,12 +1388,13 @@ def main():
                         # Display results
                         display_results(output, temp_path)
                         
-                        # Run bias analysis if requested
+                        # Mark extraction as completed for this session
+                        st.session_state.extraction_completed = True
+                        
+                        # Store bias analysis results for later display
                         if include_bias_analysis and output.get('bias_analysis_completed', False):
-                            st.markdown("**Bias Analysis Results**")
                             bias_file_path = output.get('bias_analysis_path')
                             if bias_file_path:
-                                display_bias_results(bias_file_path)
                                 st.session_state.bias_results = bias_file_path
                                 
                                 # Run AI analysis if requested
@@ -1305,8 +1468,8 @@ def main():
     bias_file = project_root / "extraction" / "universal_output" / "bias_analysis" / "text_bias_analysis_results.jsonl"
     ai_file = project_root / "extraction" / "universal_output" / "quantitative_extraction" / "ai_analysis_report.json"
     
-    # Show bias analysis results if available
-    if bias_file.exists():
+    # Show bias analysis results only if they're from the current session
+    if bias_file.exists() and st.session_state.get('extraction_completed', False):
         st.markdown("---")
         st.markdown('<h2 class="section-header">🔍 Bias Analysis Results</h2>', unsafe_allow_html=True)
         st.markdown("Comprehensive bias analysis using Entman's framing theory and advanced AI techniques.")
