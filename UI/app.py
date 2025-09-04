@@ -34,12 +34,21 @@ st.sidebar.markdown("**Required for LLM-powered analysis**")
 # This prevents sharing API keys across users on Streamlit Cloud
 st.sidebar.info("🔑 Each user must provide their own API key for security")
 
-# Get API key from user
+# Initialize API key in session state
+if 'user_api_key' not in st.session_state:
+    st.session_state.user_api_key = ''
+
+# Get API key from user (persistent within session)
 api_key = st.sidebar.text_input(
     "Enter your OpenAI API Key:",
     type="password",
+    value=st.session_state.user_api_key,
     help="Get your API key from https://platform.openai.com/api-keys"
 )
+
+# Update session state when user enters a new key
+if api_key and api_key != st.session_state.user_api_key:
+    st.session_state.user_api_key = api_key
 
 if not api_key:
     st.sidebar.warning("⚠️ API key required to use LLM features")
@@ -55,6 +64,11 @@ else:
     # Set the API key in environment for this session
     os.environ['OPENAI_API_KEY'] = api_key
     st.sidebar.success("✅ API key configured for this session")
+    
+    # Add clear API key button for security
+    if st.sidebar.button("🗑️ Clear API Key", help="Clear your API key for security"):
+        st.session_state.user_api_key = ''
+        st.rerun()
     
     # Cost estimation
     with st.sidebar.expander("Cost Estimation", expanded=False):
