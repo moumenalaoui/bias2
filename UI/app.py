@@ -1113,8 +1113,8 @@ def main():
     st.markdown("""
     <div style='text-align: center; color: #666; font-size: 0.9em; margin-top: 2rem;'>
         <p><strong>UN Report Analysis Platform</strong> | Developed by <strong>Moumen Alaoui</strong></p>
-        <p>📧 <a href="mailto:moumenalaoui@proton.me" style="color: #666;">moumenalaoui@proton.me</a> | 
-           💼 <a href="https://www.linkedin.com/in/moumenalaoui" style="color: #666;">LinkedIn Profile</a></p>
+        <p><a href="mailto:moumenalaoui@proton.me" style="color: #666;">moumenalaoui@proton.me</a> | 
+           <a href="https://www.linkedin.com/in/moumenalaoui" style="color: #666;">LinkedIn Profile</a></p>
         <p style="font-size: 0.8em; margin-top: 1rem;">AI-Powered Intelligence Platform for Advanced Policy Analysis</p>
     </div>
     """, unsafe_allow_html=True)
