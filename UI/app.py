@@ -30,39 +30,31 @@ st.set_page_config(
 st.sidebar.markdown("**OpenAI API Configuration**")
 st.sidebar.markdown("**Required for LLM-powered analysis**")
 
-# Check if API key is already set in environment
-existing_key = os.getenv('OPENAI_API_KEY', '')
-# Only consider it valid if it looks like a real API key (starts with 'sk-' and has reasonable length)
-if existing_key and existing_key.startswith('sk-') and len(existing_key) > 20:
-    st.sidebar.success("✅ API key found in environment")
-    api_key = existing_key
+# Always require user to provide their own API key for security
+# This prevents sharing API keys across users on Streamlit Cloud
+st.sidebar.info("🔑 Each user must provide their own API key for security")
+
+# Get API key from user
+api_key = st.sidebar.text_input(
+    "Enter your OpenAI API Key:",
+    type="password",
+    help="Get your API key from https://platform.openai.com/api-keys"
+)
+
+if not api_key:
+    st.sidebar.warning("⚠️ API key required to use LLM features")
+    st.sidebar.markdown("""
+    **To get started:**
+    1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+    2. Create an API key
+    3. Enter it above
+    4. Your key is stored locally and never shared
+    """)
+    st.stop()
 else:
-    # Debug info for Streamlit Cloud
-    if existing_key:
-        st.sidebar.info(f"🔍 Environment variable detected but invalid (length: {len(existing_key)})")
-    else:
-        st.sidebar.info("🔍 No API key found in environment")
-    # Get API key from user
-    api_key = st.sidebar.text_input(
-        "Enter your OpenAI API Key:",
-        type="password",
-        help="Get your API key from https://platform.openai.com/api-keys"
-    )
-    
-    if not api_key:
-        st.sidebar.warning("⚠️ API key required to use LLM features")
-        st.sidebar.markdown("""
-        **To get started:**
-        1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
-        2. Create an API key
-        3. Enter it above
-        4. Your key is stored locally and never shared
-        """)
-        st.stop()
-    else:
-        # Set the API key in environment for this session
-        os.environ['OPENAI_API_KEY'] = api_key
-        st.sidebar.success("✅ API key configured for this session")
+    # Set the API key in environment for this session
+    os.environ['OPENAI_API_KEY'] = api_key
+    st.sidebar.success("✅ API key configured for this session")
     
     # Cost estimation
     with st.sidebar.expander("Cost Estimation", expanded=False):
