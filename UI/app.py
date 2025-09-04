@@ -27,7 +27,7 @@ st.set_page_config(
 )
 
 # API Key Configuration
-st.sidebar.markdown("## 🔑 OpenAI API Configuration")
+st.sidebar.markdown("**OpenAI API Configuration**")
 st.sidebar.markdown("**Required for LLM-powered analysis**")
 
 # Check if API key is already set in environment
@@ -59,16 +59,12 @@ else:
         st.sidebar.success("✅ API key configured for this session")
     
     # Cost estimation
-    with st.sidebar.expander("💰 Cost Estimation", expanded=False):
+    with st.sidebar.expander("Cost Estimation", expanded=False):
         st.markdown("""
         **Typical costs per analysis:**
         - **Fast Path (≤3 calls)**: ~$0.01-0.03
         - **With Bias Analysis**: ~$0.05-0.15
         - **With AI Agent**: ~$0.01-0.05 per question
-        
-        **Model Pricing:**
-        - GPT-4o: $5/1M input tokens, $15/1M output tokens
-        - GPT-4o-mini: $0.15/1M input tokens, $0.60/1M output tokens
         
         *Costs are estimates and may vary based on document size and complexity.*
         """)
@@ -852,7 +848,8 @@ def main():
         st.session_state.ai_chat_history = []
     
     st.markdown('<h1 class="main-title">UN Report Analysis Platform</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Developed by Moumen Alaoui</p>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Developed by <strong>Moumen Alaoui</strong> | <a href="mailto:moumenalaoui@proton.me">moumenalaoui@proton.me</a> | <a href="https://www.linkedin.com/in/moumenalaoui">LinkedIn</a></p>', unsafe_allow_html=True)
+
     
     # Initialize session state for storing results
     if 'analysis_results' not in st.session_state:
@@ -1109,7 +1106,18 @@ def main():
         - What are the limitations of this bias analysis?
         - Which UNSCR 1701 articles are most frequently violated?
         - How does the selection bias manifest in this report?
-        """)
+                 """)
+
+    # Professional footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; font-size: 0.9em; margin-top: 2rem;'>
+        <p><strong>UN Report Analysis Platform</strong> | Developed by <strong>Moumen Alaoui</strong></p>
+        <p>📧 <a href="mailto:moumenalaoui@proton.me" style="color: #666;">moumenalaoui@proton.me</a> | 
+           💼 <a href="https://www.linkedin.com/in/moumenalaoui" style="color: #666;">LinkedIn Profile</a></p>
+        <p style="font-size: 0.8em; margin-top: 1rem;">AI-Powered Intelligence Platform for Advanced Policy Analysis</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main() 
