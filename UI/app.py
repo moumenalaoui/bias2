@@ -155,7 +155,7 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         
         # Convert PDF to JSONL and save to universal output
         hybrid_result = subprocess.run([
-            "python3", "hybrid_extractor.py", str(pdf_dest), str(pdf_conversion_dir)
+            sys.executable, "hybrid_extractor.py", str(pdf_dest), str(pdf_conversion_dir)
         ], capture_output=True, text=True, cwd=scripts_dir, timeout=300)
         
         if hybrid_result.returncode != 0:
@@ -174,7 +174,7 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         
         # Run ultra-fast extraction with user-configured LLM calls
         fast_result = subprocess.run([
-            "python3", "ultra_fast_quantitative_extractor.py",
+            sys.executable, "ultra_fast_quantitative_extractor.py",
             "--input", str(jsonl_file), 
             "--output_dir", str(quantitative_dir), 
             "--max_windows", str(max_calls)
@@ -235,7 +235,7 @@ def run_bias_analysis(jsonl_file_path, output_dir):
         
         # Run bias analysis
         bias_result = subprocess.run([
-            "python3", "call_api_bias_optimized.py", 
+            sys.executable, "call_api_bias_optimized.py", 
             "--input", str(jsonl_file_path),
             "--output", str(output_dir),
             "--test"  # Start with test mode for faster results
@@ -267,7 +267,7 @@ def run_ai_analysis(quantitative_file, bias_file, output_dir):
         
         # Run AI analysis agent
         ai_result = subprocess.run([
-            "python3", "ai_analysis_agent.py", 
+            sys.executable, "ai_analysis_agent.py", 
             "--quantitative", str(quantitative_file),
             "--bias", str(bias_file),
             "--output", str(output_dir / "ai_analysis_report.json")
@@ -1114,7 +1114,7 @@ def main():
     <div style='text-align: center; color: #666; font-size: 0.9em; margin-top: 2rem;'>
         <p><strong>UN Report Analysis Platform</strong> | Developed by <strong>Moumen Alaoui</strong></p>
         <p><a href="mailto:moumenalaoui@proton.me" style="color: #666;">moumenalaoui@proton.me</a> | 
-           <a href="https://www.linkedin.com/in/moumenalaoui" style="color: #666;">LinkedIn Profile</a></p>
+           <a href="https://www.linkedin.com/in/moumenalaoui" style="color: #666;">LinkedIno </a></p>
         <p style="font-size: 0.8em; margin-top: 1rem;">AI-Powered Intelligence Platform for Advanced Policy Analysis</p>
     </div>
     """, unsafe_allow_html=True)
