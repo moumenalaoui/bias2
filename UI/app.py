@@ -200,7 +200,7 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         if include_bias_analysis:
             st.info(f"Running bias analysis on {jsonl_file.name}...")
             
-            bias_success, bias_output = run_bias_analysis(jsonl_file, bias_analysis_dir)
+            bias_success, bias_output = run_bias_analysis(jsonl_file, bias_analysis_dir, max_calls)
             if bias_success:
                 st.success(f"Bias analysis completed and saved to universal output")
                 # Add bias analysis info to summary
@@ -223,8 +223,8 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
     except Exception as e:
         return False, f"Error: {str(e)}"
 
-def run_bias_analysis(jsonl_file_path, output_dir):
-    """Run bias analysis on the extracted JSONL data"""
+def run_bias_analysis(jsonl_file_path, output_dir, max_calls=5):
+    """Run bias analysis on the extracted JSONL data with limited LLM calls"""
     try:
         st.info("Starting bias analysis...")
         
@@ -233,11 +233,14 @@ def run_bias_analysis(jsonl_file_path, output_dir):
         project_root = current_dir.parent if current_dir.name == "UI" else current_dir
         scripts_dir = project_root / "extraction" / "scripts"
         
-        # Run bias analysis
+        # Run bias analysis with limited LLM calls
+        # Calculate how many paragraphs to process based on max_calls
+        # For bias analysis, we'll process max_calls paragraphs to respect user's preference
         bias_result = subprocess.run([
             sys.executable, "call_api_bias_optimized.py", 
             "--input", str(jsonl_file_path),
-            "--output", str(output_dir)
+            "--output", str(output_dir),
+            "--max-paragraphs", str(max_calls)
         ], capture_output=True, text=True, cwd=scripts_dir, timeout=600)
         
         if bias_result.returncode != 0:

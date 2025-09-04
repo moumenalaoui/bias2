@@ -278,7 +278,7 @@ async def process_single_paragraph(content, paragraph_id, rate_limiter, resoluti
         logger.error(f"Error processing paragraph {paragraph_id}: {e}")
         return None
 
-async def process_paragraphs_optimized(test_mode=True, specific_file=None, output_dir=None):
+async def process_paragraphs_optimized(test_mode=True, specific_file=None, output_dir=None, max_paragraphs=None):
     """Process all paragraphs with optimized parallel processing."""
     resolution_cache = load_resolution_cache()
     rate_limiter = RateLimiter(RATE_LIMIT, MAX_CONCURRENT_REQUESTS)
@@ -326,10 +326,13 @@ async def process_paragraphs_optimized(test_mode=True, specific_file=None, outpu
         
         logger.info(f"Found {len(paragraphs)} paragraphs in {filename}")
         
-        # Limit paragraphs for test mode
+        # Limit paragraphs for test mode or max_paragraphs
         if test_mode:
             paragraphs = paragraphs[:3]
             logger.info(f"Test mode: processing only first 3 paragraphs")
+        elif max_paragraphs and max_paragraphs > 0:
+            paragraphs = paragraphs[:max_paragraphs]
+            logger.info(f"Limited mode: processing only first {max_paragraphs} paragraphs")
         
         report_info = {}
         
@@ -367,6 +370,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", type=str, help="Input JSONL file path")
     parser.add_argument("--output", type=str, help="Output directory")
     parser.add_argument("--test", action="store_true", help="Run in test mode (process only first 3 paragraphs)")
+    parser.add_argument("--max-paragraphs", type=int, default=None, help="Maximum number of paragraphs to process")
     parser.add_argument("--max-concurrent", type=int, default=5, help="Maximum concurrent API requests")
     parser.add_argument("--batch-size", type=int, default=10, help="Batch size for processing")
     
@@ -384,5 +388,6 @@ if __name__ == "__main__":
     asyncio.run(process_paragraphs_optimized(
         test_mode=test_mode, 
         specific_file=input_file, 
-        output_dir=output_dir
+        output_dir=output_dir,
+        max_paragraphs=args.max_paragraphs
     )) 
