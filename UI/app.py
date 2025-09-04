@@ -237,8 +237,7 @@ def run_bias_analysis(jsonl_file_path, output_dir):
         bias_result = subprocess.run([
             sys.executable, "call_api_bias_optimized.py", 
             "--input", str(jsonl_file_path),
-            "--output", str(output_dir),
-            "--test"  # Start with test mode for faster results
+            "--output", str(output_dir)
         ], capture_output=True, text=True, cwd=scripts_dir, timeout=600)
         
         if bias_result.returncode != 0:
