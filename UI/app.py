@@ -14,6 +14,7 @@ from pathlib import Path
 import tempfile
 import shutil
 from datetime import datetime
+from typing import Dict, Any
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -22,92 +23,57 @@ sys.path.append(str(Path(__file__).parent.parent))
 st.set_page_config(
     page_title="UN Report Analysis - Fast Path",
     page_icon="",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
 # Minimalistic CSS styling
 st.markdown("""
 <style>
     .main-title {
-        font-size: 2.75rem;
+        font-size: 2.5rem;
         font-weight: 300;
-        color: #0f172a;
+        color: #374151;
         text-align: center;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.5rem;
         letter-spacing: -0.025em;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     .subtitle {
-        font-size: 1.125rem;
-        color: #475569;
+        font-size: 1.1rem;
+        color: #6b7280;
         text-align: center;
-        margin-bottom: 2.5rem;
+        margin-bottom: 2rem;
         font-weight: 400;
-        letter-spacing: 0.025em;
     }
     
     .stButton > button {
-        background: #f8fafc;
-        color: #1e293b;
-        border: 1px solid #cbd5e1;
-        border-radius: 6px;
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
         padding: 0.5rem 1rem;
-        font-weight: 500;
+        font-weight: 400;
         font-size: 0.9rem;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     .stButton > button:hover {
-        background: #f1f5f9;
-        border-color: #94a3b8;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        background: #e5e7eb;
+        border-color: #9ca3af;
     }
     
     .stFileUploader > div > div {
-        border: 2px dashed #cbd5e1;
-        background: #f8fafc;
+        border: 2px dashed #d1d5db;
+        background: #f9fafb;
         border-radius: 8px;
-        transition: all 0.2s ease;
-    }
-    
-    .stFileUploader > div > div:hover {
-        border-color: #94a3b8;
-        background: #f1f5f9;
     }
     
     .section-header {
         font-size: 1.25rem !important;
         font-weight: 600 !important;
-        color: #1e293b !important;
-        margin: 2.5rem 0 1.5rem 0 !important;
-        padding-bottom: 0.75rem !important;
-        border-bottom: 2px solid #e2e8f0 !important;
-    }
-    
-    .stMetric {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 1.25rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
-    
-    .stDataFrame {
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    }
-    
-    .main-container {
-        background: #ffffff;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        margin: 1rem 0;
+        color: #1e3a8a !important;
+        margin: 2rem 0 1rem 0 !important;
+        padding-bottom: 0.5rem !important;
+        border-bottom: 1px solid #e5e7eb !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -206,6 +172,7 @@ def run_fast_path_extraction(pdf_file, output_dir, include_bias_analysis=False, 
         summary['pdf_conversion_dir'] = str(pdf_conversion_dir)
         summary['quantitative_dir'] = str(quantitative_dir)
         summary['bias_analysis_dir'] = str(bias_analysis_dir)
+        summary['quantitative_file'] = str(results_file)  # Add the quantitative file path
         summary['llm_calls_config'] = {'min_calls': min_calls, 'max_calls': max_calls, 'actual_calls': summary.get('llm_calls_used', 0)}
         
         return True, summary
@@ -276,6 +243,34 @@ def run_ai_analysis(quantitative_file, bias_file, output_dir):
             
     except Exception as e:
         return False, f"AI analysis error: {str(e)}"
+
+def normalize_extracted_data(input_file: str, output_file: str) -> Dict[str, Any]:
+    """Apply comprehensive data normalization to extracted facts"""
+    try:
+        # Get the project root and add scripts directory to path
+        current_dir = Path.cwd()
+        project_root = current_dir.parent if current_dir.name == "UI" else current_dir
+        scripts_dir = project_root / "extraction" / "scripts"
+        sys.path.insert(0, str(scripts_dir))
+        
+        # Import the fact normalizer directly
+        from fact_normalizer import normalize_facts_from_file
+        
+        # Process the file
+        stats = normalize_facts_from_file(input_file, output_file)
+        
+        return {
+            'success': True,
+            'stats': stats,
+            'message': f"Data normalization complete: {stats['original_facts']} → {stats['normalized_facts']} facts"
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f"Normalization failed: {str(e)}"
+        }
 
 def display_ai_analysis_results(ai_file_path):
     """Display AI analysis results"""
@@ -374,7 +369,7 @@ def display_bias_results(bias_file_path):
                     else:
                         st.text(text_content)
                     
-                    st.markdown("**Bias Type**")
+                    st.markdown("**🏷️ Bias Type**")
                     bias_flag = entry.get('bias_flag', 'Unknown')
                     if bias_flag == 'none':
                         st.success("No bias detected")
@@ -408,7 +403,7 @@ def display_bias_results(bias_file_path):
                     else:
                         st.write("No violations identified")
                     
-                    st.markdown("**Location**")
+                    st.markdown("**📍 Location**")
                     location = entry.get('location', 'Not specified')
                     st.info(location)
         
@@ -601,7 +596,17 @@ def display_results(data, output_dir):
     
     # Use the universal output path from the data
     if 'quantitative_dir' in data:
-        results_file = Path(data['quantitative_dir']) / "ultra_fast_extraction_results.jsonl"
+        quantitative_dir = Path(data['quantitative_dir'])
+        # Use normalized file if available, otherwise fall back to original
+        normalized_file = quantitative_dir / "normalized_extraction_results.jsonl"
+        original_file = quantitative_dir / "ultra_fast_extraction_results.jsonl"
+        results_file = normalized_file if normalized_file.exists() else original_file
+        
+        # Show which file is being used
+        if normalized_file.exists():
+            st.info(f"📊 Displaying **normalized data** from: `{normalized_file.name}`")
+        else:
+            st.info(f"📊 Displaying **original data** from: `{original_file.name}`")
     else:
         # Fallback to the old method
         results_file = Path(output_dir) / "ultra_fast_extraction_results.jsonl"
@@ -758,26 +763,34 @@ def get_ai_response(question, quantitative_file, bias_file, ai_analysis_file=Non
     try:
         # Import the interactive agent
         try:
-            sys.path.append(str(Path("../extraction/scripts").resolve()))
+            # Get the project root and add scripts directory to path
+            current_dir = Path.cwd()
+            project_root = current_dir.parent if current_dir.name == "UI" else current_dir
+            scripts_dir = project_root / "extraction" / "scripts"
+            sys.path.insert(0, str(scripts_dir))
             from interactive_ai_agent import InteractiveAIAgent
         except ImportError:
             return "❌ Interactive AI agent not available. Please ensure the system is properly installed."
         
-        # Check if files exist before trying to load them
-        if not quantitative_file or not Path(quantitative_file).exists():
-            return "❌ Quantitative data file not found. Please run quantitative extraction first."
-        
-        if not bias_file or not Path(bias_file).exists():
-            return "❌ Bias analysis file not found. Please run bias analysis first."
-        
         # Initialize agent
         agent = InteractiveAIAgent()
         
-        # Load data
-        agent.load_analysis_data(quantitative_file, bias_file, ai_analysis_file)
+        # Load data - only pass non-None files
+        files_to_load = []
+        if quantitative_file:
+            files_to_load.append(quantitative_file)
+        if bias_file:
+            files_to_load.append(bias_file)
+        if ai_analysis_file:
+            files_to_load.append(ai_analysis_file)
+            
+        if not files_to_load:
+            return f"❌ No analysis data files found. Please run an analysis first. (quantitative_file: {quantitative_file}, bias_file: {bias_file}, ai_analysis_file: {ai_analysis_file})"
+            
+        agent.load_analysis_data(*files_to_load)
         
         if not agent.data_loaded:
-            return "❌ Failed to load analysis data. Please check if the files contain valid data."
+            return "❌ Failed to load analysis data"
         
         # Get response
         response = agent.ask_question(question)
@@ -805,39 +818,46 @@ def main():
         st.session_state.extraction_completed = False
     
     
+    # File upload
     uploaded_file = st.file_uploader(
         "Upload a UN Security Council report (PDF)",
         type=['pdf']
     )
     
     if uploaded_file:
+        # Simple file confirmation
         st.markdown(f"**File:** {uploaded_file.name}")
         
+        # Minimal file info
         col1, col2 = st.columns(2)
         with col1:
             st.text(f"Size: {uploaded_file.size / 1024:.1f} KB")
         with col2:
             st.text(f"Type: {uploaded_file.type}")
         
-        st.markdown('<h3 class="section-header">Analysis Configuration</h3>', unsafe_allow_html=True)
+        # Bias analysis option
+        st.markdown("**Analysis Configuration**")
         
         col1, col2 = st.columns(2)
         
         with col1:
             include_bias_analysis = st.checkbox(
                 "Include Bias Analysis",
-                help="Enable bias analysis for deeper insights"
+                help="Enable this to also analyze the report for bias, framing, and language patterns. This will add additional processing time but provide deeper insights."
             )
             
             include_ai_agent = st.checkbox(
                 "Include AI Agent Analysis",
-                help="Enable AI-powered comprehensive analysis"
+                help="Enable this to get comprehensive AI-powered analysis combining quantitative data and bias analysis. Requires bias analysis to be enabled."
             )
         
-        st.info("Interactive AI Chat will be available after analysis completion")
+        # Note: Interactive AI Chat is always available after analysis
+        st.info("**Interactive AI Chat will be available after analysis completion**")
         
-        st.markdown('<h3 class="section-header">LLM Call Configuration</h3>', unsafe_allow_html=True)
+        # LLM Call Configuration
+        st.markdown("**LLM Call Configuration**")
         
+        # Simple preset selection
         call_presets = {
             "Ultra-Fast (1-2 calls)": {"min": 1, "max": 2},
             "Fast (3-5 calls)": {"min": 3, "max": 5},
@@ -859,6 +879,7 @@ def main():
             min_calls = preset["min"]
             max_calls = preset["max"]
         
+        # Simple estimates
         avg_calls = (min_calls + max_calls) / 2
         
         col1, col2 = st.columns(2)
@@ -889,6 +910,19 @@ def main():
                     if success and isinstance(output, dict):
                         # Store results in session state (for potential future use)
                         st.session_state.analysis_results = output
+                        
+                        # Apply data normalization
+                        quant_file = output.get('quantitative_file')
+                        if quant_file and os.path.exists(quant_file):
+                            normalized_file = os.path.join(os.path.dirname(quant_file), 'normalized_extraction_results.jsonl')
+                            normalization_result = normalize_extracted_data(str(quant_file), str(normalized_file))
+                            
+                            if normalization_result['success']:
+                                st.success(normalization_result['message'])
+                                # Update the output to use normalized file
+                                output['quantitative_file'] = normalized_file
+                            else:
+                                st.warning(f"Normalization failed: {normalization_result['message']}")
                         
                         # Display results
                         display_results(output, temp_path)
@@ -926,6 +960,7 @@ def main():
                         elif include_bias_analysis:
                             st.warning("Bias analysis was requested but failed to complete")
                         
+                        # Download summary
                         json_str = json.dumps(output, indent=2)
                         st.download_button(
                             label="Download Summary (JSON)",
@@ -935,72 +970,99 @@ def main():
                             key=f"summary_download_{id(json_str)}"
                         )
 
+                        # AI Chat interface is now available separately below
+
                     else:
                         st.error(f"Extraction failed: {output}")
                         
                 finally:
+                    # Clean up
                     try:
                         shutil.rmtree(temp_path)
                     except:
                         pass
+        
+        # No need to display results again - they're already shown above
+        pass
     
-    if hasattr(st.session_state, 'analysis_results') and st.session_state.analysis_results:
-        st.markdown("---")
-        st.markdown('<h2 class="section-header">Interactive AI Agent</h2>', unsafe_allow_html=True)
-        st.markdown("Ask questions about your analysis results and get intelligent, data-driven answers!")
+    # Interactive AI Chat with NO RELOAD using st.form - ALWAYS AVAILABLE
+    # This is the EXACT method from your working code
+    if "ai_chat_history" not in st.session_state:
+        st.session_state.ai_chat_history = []
+    
+    # Show AI chat interface if we have any analysis results
+    # Use normalized file if available, otherwise fall back to original
+    # Get the project root directory
+    current_dir = Path.cwd()
+    project_root = current_dir.parent if current_dir.name == "UI" else current_dir
+    
+    normalized_file = project_root / "extraction" / "universal_output" / "quantitative_extraction" / "normalized_extraction_results.jsonl"
+    original_file = project_root / "extraction" / "universal_output" / "quantitative_extraction" / "ultra_fast_extraction_results.jsonl"
+    quant_file = normalized_file if normalized_file.exists() else original_file
+    
+    # Bias analysis is in its own directory, AI analysis might be in quantitative_extraction
+    bias_file = project_root / "extraction" / "universal_output" / "bias_analysis" / "text_bias_analysis_results.jsonl"
+    ai_file = project_root / "extraction" / "universal_output" / "quantitative_extraction" / "ai_analysis_report.json"
+    
+    # ALWAYS show AI agent - it will work with whatever files are available
+    st.markdown("---")
+    st.markdown('<h2 class="section-header">💬 Interactive AI Agent</h2>', unsafe_allow_html=True)
+    st.markdown("Ask questions about your analysis results and get intelligent, data-driven answers!")
+    
+    # Display chat history
+    for message in st.session_state.ai_chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Use st.form to prevent page reload - EXACT method from working code
+    with st.form("ai_chat_form", clear_on_submit=True):
+        user_question = st.text_input("Ask a question about the analysis...", key="chat_input")
+        submit_button = st.form_submit_button("🤖 Ask AI", type="primary")
         
-        for message in st.session_state.ai_chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-        
-        with st.form("ai_chat_form", clear_on_submit=True):
-            user_question = st.text_input("Ask a question about the analysis...", key="chat_input")
-            submit_button = st.form_submit_button("Ask AI", type="primary")
+        if submit_button and user_question:
+            # Add user message to chat history
+            st.session_state.ai_chat_history.append({"role": "user", "content": user_question})
             
-            if submit_button and user_question:
-                st.session_state.ai_chat_history.append({"role": "user", "content": user_question})
+            # Get AI response
+            with st.spinner("🤖 AI Agent is thinking..."):
+                # Only pass files that exist
+                quant_path = str(quant_file) if quant_file.exists() else None
+                bias_path = str(bias_file) if bias_file.exists() else None
+                ai_path = str(ai_file) if ai_file.exists() else None
                 
-                output = st.session_state.analysis_results
-                quant_file = str(Path(output.get('quantitative_dir', '')) / "ultra_fast_extraction_results.jsonl") if output.get('quantitative_dir') else None
-                bias_file = str(Path(output.get('bias_analysis_dir', '')) / "text_bias_analysis_results.jsonl") if output.get('bias_analysis_dir') else None
-                ai_file = str(Path(output.get('quantitative_dir', '')) / "ai_analysis_report.json") if output.get('quantitative_dir') else None
+                # Debug info
+                st.info(f"Debug: quant_file={quant_file}, exists={quant_file.exists()}, quant_path={quant_path}")
+                st.info(f"Debug: bias_file={bias_file}, exists={bias_file.exists()}, bias_path={bias_path}")
+                st.info(f"Debug: ai_file={ai_file}, exists={ai_file.exists()}, ai_path={ai_path}")
                 
-                with st.spinner("AI Agent is thinking..."):
-                    response = get_ai_response(user_question, quant_file, bias_file, ai_file)
-                
-                st.session_state.ai_chat_history.append({"role": "assistant", "content": response})
-                st.rerun()
-        
-        if st.button("Clear Chat History", key="clear_chat"):
-            st.session_state.ai_chat_history = []
+                response = get_ai_response(user_question, quant_path, bias_path, ai_path)
+            
+            # Add AI response to chat history
+            st.session_state.ai_chat_history.append({"role": "assistant", "content": response})
+            
+            # Force rerun to update chat display
             st.rerun()
-        
-        with st.expander("Suggested Questions", expanded=False):
-            st.markdown("""
-            **Try asking:**
-            - What are the main patterns of bias in this report?
-            - Which actor has the most violations according to the data?
-            - How does Entman's framing theory apply to this analysis?
-            - What are the most significant legal violations found?
-            - Can you compare the actions of different actors?
-            - What recommendations would you make based on this analysis?
-            - How reliable is the quantitative data in this report?
-            - What are the limitations of this bias analysis?
-            - Which UNSCR 1701 articles are most frequently violated?
-            - How does the selection bias manifest in this report?
-            """)
-        
-        # Professional footer with credentials
-        st.markdown("---")
+    
+    # Clear chat button
+    if st.button("🗑️ Clear Chat History", key="clear_chat"):
+        st.session_state.ai_chat_history = []
+        st.rerun()
+    
+    # Suggested questions
+    with st.expander("💡 Suggested Questions", expanded=False):
         st.markdown("""
-        <div style="text-align: center; padding: 2rem 0; color: #64748b; font-size: 0.9rem;">
-            <p><strong>UN Report Analysis Platform</strong></p>
-            <p>Developed by <strong>Moumen Alaoui</strong></p>
-            <p style="margin-top: 0.5rem; font-size: 0.8rem;">
-                Advanced bias detection and quantitative analysis for UN Security Council reports
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        **Try asking:**
+        - What are the main patterns of bias in this report?
+        - Which actor has the most violations according to the data?
+        - How does Entman's framing theory apply to this analysis?
+        - What are the most significant legal violations found?
+        - Can you compare the actions of different actors?
+        - What recommendations would you make based on this analysis?
+        - How reliable is the quantitative data in this report?
+        - What are the limitations of this bias analysis?
+        - Which UNSCR 1701 articles are most frequently violated?
+        - How does the selection bias manifest in this report?
+        """)
 
 if __name__ == "__main__":
     main() 

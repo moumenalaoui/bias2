@@ -45,8 +45,17 @@ def clean_text_noise(text: str) -> str:
     text = re.sub(r'<sup>\*</sup>', '', text)   # Remove asterisk superscripts
     text = re.sub(r'<span[^>]*id="[^"]*"[^>]*></span>', '', text)
     
-    # Remove standalone figure numbers
+    # Remove standalone figure numbers but preserve captions with data
+    # Look for figure captions that contain numbers (potential data points)
+    figure_captions = re.findall(r'#{1,6}\s*Figure\s+[IVX]+[^#\n]*?(\d+[^#\n]*)', text, re.IGNORECASE)
+    
+    # Remove standalone figure headers
     text = re.sub(r'^#{1,6}\s*Figure\s+[IVX]+[^#\n]*$', '', text, flags=re.MULTILINE)
+    
+    # Add back figure captions that contain data
+    for caption in figure_captions:
+        if re.search(r'\d+', caption):  # Only if caption contains numbers
+            text += f"\nFigure caption: {caption.strip()}"
     
     # Remove empty lines and excessive whitespace
     text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Multiple empty lines to double
