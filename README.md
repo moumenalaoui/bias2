@@ -1,15 +1,16 @@
-# UN Security Council Report Analysis Pipeline 
+# UN Security Council Report Analysis Platform
 
-**AI-Powered Intelligence Platform for Advanced Policy Analysis**
+**AI-Powered Web Application for Policy Analysis and Bias Detection**
 
-A comprehensive analysis pipeline that leverages artificial intelligence to extract quantitative data, detect sophisticated bias patterns, and generate meta-intelligence from UN Security Council reports using advanced computational linguistics and machine learning techniques.
+A comprehensive Streamlit web application that analyzes UN Security Council reports using OpenAI's GPT-4o to extract quantitative data, detect bias patterns using Entman's framing theory, and provide interactive AI-powered insights. The platform features a modern web interface with real-time processing, interactive visualizations, and persistent user sessions.
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.8+
-- OpenAI API key (you'll enter this in the app)
+- OpenAI API key (entered securely in the web interface)
 - 4GB+ RAM recommended
+- Modern web browser (Chrome, Firefox, Safari, Edge)
 
 ### Installation
 ```bash
@@ -38,7 +39,7 @@ cd UI
 streamlit run app.py
 ```
 
-**Note**: You'll be prompted to enter your OpenAI API key in the sidebar when you first run the app. Your key is stored locally for the session and never shared.
+**Note**: You'll be prompted to enter your OpenAI API key in the sidebar when you first run the app. Your key is stored securely using browser cookies and persists across refreshes, but is never shared with other users.
 
 ### Cost Information
 - **Fast Path Analysis**: ~$0.01-0.03 per document
@@ -58,45 +59,64 @@ streamlit run app.py
 
 The application will open at `http://localhost:8501`
 
-## Project Overview
+## What This Application Does
 
-This system represents an automated policy analysis, combining multiple AI techniques to process UN Security Council reports at scale. The pipeline extracts structured quantitative data, performs bias analysis using established academic frameworks, and generates cross-report intelligence that reveals patterns invisible to human analysts.
+This is a **web-based analysis platform** that processes UN Security Council reports through three main analysis modes:
 
-## Core System Architecture
+### 🔍 **Quantitative Data Extraction**
+- Extracts structured numerical data from reports (fatalities, violations, displacements, etc.)
+- Uses GPT-4o with function calling for precise data extraction
+- Configurable LLM call limits (1-10 calls) for cost control
+- Real-time progress tracking with visual progress bars
 
-### Hierarchical Intelligence System
+### 🎯 **Bias Analysis** 
+- Implements Entman's framing theory to detect bias patterns
+- Analyzes framing bias, selection bias, and language neutrality
+- Processes all paragraphs or configurable subsets
+- High-concurrency processing (30 concurrent requests) for speed
+- Configurable LLM call limits for cost management
 
-The system operates on three distinct analytical layers:
+### 🤖 **AI Agent Analysis**
+- Interactive AI assistant for asking questions about analysis results
+- Expert knowledge of UN resolutions and bias analysis
+- Conversational interface with suggested questions
+- Context-aware responses based on extracted data
 
-1. **Individual Report Processing Layer**
-   - Quantitative data extraction using GPT-4o with structured prompts
-   - Bias analysis implementation of Entman's framing theory
-   - Legal violation mapping against UNSCR 1701 (2006) articles
-   - Entity resolution for consistent actor identification
+### 📊 **Interactive Results Display**
+- **3-tab interface** for bias analysis results:
+  - Dataset Overview (CSV table with download)
+  - Detailed Results (full text and analysis)
+  - Bias Analysis Summary (charts and statistics)
+- **Interactive visualizations** using Plotly
+- **Real-time metrics** and performance tracking
+- **Downloadable outputs** in multiple formats
 
-2. **Pattern Synthesis Engine**
-   - Temporal correlation analysis across multiple reports
-   - Geographic clustering of violations and incidents
-   - Actor behavior evolution tracking over time
-   - Bias pattern shift detection and quantification
+## Web Application Features
 
-3. **Meta-Intelligence Engine**
-   - Cross-report pattern synthesis using GPT-4o
-   - Predictive analytics for bias evolution
-   - Institutional bias fingerprinting
-   - Strategic intelligence generation
+### 🖥️ **Modern Web Interface**
+- **Streamlit-based UI** with responsive design
+- **Real-time processing** with progress indicators
+- **Session persistence** - results persist until new analysis
+- **Multi-user support** - each user has their own API key and session
+- **Mobile-friendly** responsive design
 
-### Technical Implementation
+### 🔐 **Secure API Key Management**
+- **Individual user keys** - each user provides their own OpenAI API key
+- **Persistent storage** - keys stored securely in browser cookies
+- **Cross-refresh persistence** - keys persist across browser refreshes
+- **Security features** - encrypted storage, clear button, no sharing
 
-The system processes documents through a seven-stage pipeline:
+### ⚡ **Performance Optimizations**
+- **High-concurrency processing** - up to 30 concurrent API requests
+- **Configurable limits** - control LLM calls and processing scope
+- **Timeout handling** - robust error handling and retry logic
+- **Memory efficient** - processes large documents without memory issues
 
-1. **PDF Upload and Preprocessing** - Hybrid text extraction using Marker PDF parser with fallback to OCR
-2. **Structured Data Conversion** - Conversion to JSONL format for efficient processing
-3. **Quantitative Data Extraction** - GPT-4o API calls with structured extraction prompts
-4. **Bias Analysis** - Implementation of Entman's framing theory
-5. **Pattern Synthesis** - Cross-report correlation analysis
-6. **Meta-Intelligence Generation** - Insights using GPT-4o on synthesized patterns
-7. **Results Presentation** - Interactive web interface with downloadable outputs
+### 📈 **Interactive Visualizations**
+- **Plotly charts** - interactive bar charts, pie charts, scatter plots
+- **Real-time metrics** - processing speed, accuracy, cost tracking
+- **Data export** - CSV downloads, JSON outputs
+- **Responsive charts** - adapt to different screen sizes
 
 ## Core Analysis Components
 
@@ -221,65 +241,56 @@ bias2/
 - **Concurrent Requests**: 5 (optimal for local deployment)
 - **Retry Attempts**: 3 (with exponential backoff)
 
-## Usage Workflows
+## How to Use the Application
 
-### Single Report Analysis
+### 🚀 **Getting Started**
+1. **Launch the app** - Run `streamlit run UI/app.py`
+2. **Enter API key** - Provide your OpenAI API key in the sidebar
+3. **Upload PDF** - Drag and drop a UN Security Council report
+4. **Configure analysis** - Choose which analyses to run:
+   - ✅ Include Quantitative Extraction (1-10 LLM calls)
+   - ✅ Include Bias Analysis (configurable LLM calls)
+   - ✅ Include AI Agent Analysis
+   - ✅ Process All Paragraphs (for bias analysis)
 
-1. **Document Upload** - Drag and drop UN report PDF with automatic validation
-2. **Analysis Configuration** - Select Quantitative Extraction, Bias Analysis, and AI Analysis
-3. **Processing** - Real-time progress tracking with ETA calculation
-4. **Results** - Interactive tabbed interface with downloadable outputs
+### 📊 **Viewing Results**
+1. **Quantitative Results** - Interactive charts and downloadable data
+2. **Bias Analysis** - 3-tab interface:
+   - **Dataset Overview** - CSV table with key metrics
+   - **Detailed Results** - Full text and analysis for each paragraph
+   - **Bias Analysis Summary** - Charts and statistics
+3. **AI Agent** - Ask questions about your analysis results
 
-### Multi-Report Intelligence
+### 💡 **Pro Tips**
+- **Start small** - Use 1-3 LLM calls for testing
+- **Monitor costs** - Check the cost estimation in the sidebar
+- **Use AI Agent** - Ask specific questions about your results
+- **Download data** - Export results for further analysis
 
-1. **Mode Selection** - Choose "Multi-Report Intelligence" and upload 2-20 PDF files
-2. **Automated Processing** - Individual report processing, cross-report pattern synthesis, meta-intelligence generation
-3. **Results Exploration** - Individual Reports, Cross-Report Patterns, Meta-Intelligence, and Downloads tabs
+## Technical Architecture
 
-### Interactive AI Analysis
+### 🏗️ **System Components**
+- **Frontend**: Streamlit web application (`UI/app.py`)
+- **Backend Scripts**: Python analysis modules in `extraction/scripts/`
+- **Data Processing**: Hybrid PDF extraction with OCR fallback
+- **API Integration**: OpenAI GPT-4o with function calling
+- **Storage**: Local file system with automatic cleanup
 
-1. **Load Analysis Data** - Quantitative extraction results, bias analysis data, AI analysis reports
-2. **Ask Questions** - Natural language queries with expert-level analysis
-3. **Explore Insights** - Suggested questions, detailed explanations, actionable recommendations
-
-## Command Line Interface
-
-### Core Commands
-
-```bash
-# Run full pipeline
-./run_bias2.sh
-
-# Individual components
-python extraction/scripts/gpt_quantitative_extractor.py --input report.jsonl
-python extraction/scripts/call_api_bias_optimized.py --input report.jsonl
-python extraction/scripts/interactive_ai_agent.py --quantitative data.jsonl --bias bias.jsonl
-python extraction/scripts/legal_violation_mapper.py --input data.jsonl
-python extraction/scripts/actor_disambiguation.py --input data.jsonl
-python extraction/scripts/simple_analysis.py --input data.jsonl
-
-# Multi-report analysis
-python multi_report_analysis/batch_processor.py --reports report1.pdf report2.pdf
-
-# Launch web interface
-cd UI && streamlit run app.py
+### 📁 **Key Files**
+```
+UI/app.py                           # Main web application
+extraction/scripts/
+├── hybrid_extractor.py             # PDF to text conversion
+├── ultra_fast_quantitative_extractor.py  # Quantitative data extraction
+├── call_api_bias_optimized.py     # Bias analysis with high concurrency
+└── ai_analysis_agent.py           # Interactive AI assistant
 ```
 
-### Programmatic Usage
-
-```python
-from multi_report_analysis.batch_processor import MultiReportBatchProcessor
-from extraction.scripts.interactive_ai_agent import InteractiveAIAgent
-
-# Multi-report processing
-processor = MultiReportBatchProcessor()
-results = processor.process_multiple_reports(pdf_paths, report_names)
-
-# Interactive AI analysis
-agent = InteractiveAIAgent()
-agent.load_analysis_data(quantitative_file, bias_file)
-response = agent.ask_question("What patterns emerge in the bias analysis?")
-```
+### 🔧 **Configuration Options**
+- **LLM Call Limits**: Control API usage and costs
+- **Processing Scope**: Choose which analyses to run
+- **Concurrency**: Adjust parallel processing (default: 30 concurrent)
+- **Timeout Settings**: Handle large documents gracefully
 
 ## Output Formats
 
@@ -325,22 +336,23 @@ response = agent.ask_question("What patterns emerge in the bias analysis?")
 
 ## Deployment Options
 
-### Local Deployment (Current)
+### 🏠 **Local Deployment (Current)**
 - **Cost**: Free (except OpenAI API usage)
 - **Performance**: Limited by local hardware
 - **Setup Time**: 5-10 minutes
-- **Best For**: Development, testing, small-scale analysis
+- **Best For**: Development, testing, personal use
 
-### Cloud Deployment (Recommended)
-- **Cost**: $50-200/month
-- **Performance**: 10x faster with enterprise API rates
-- **Setup Time**: 30-60 minutes
-- **Best For**: Production use, multi-user access, large-scale analysis
+### ☁️ **Streamlit Cloud Deployment**
+- **Cost**: Free tier available
+- **Performance**: Cloud-based processing
+- **Setup Time**: 15-30 minutes
+- **Best For**: Sharing with others, public access
 
-### Institutional Deployment
-- **Cost**: $200-1000/month
-- **Features**: Custom API limits, dedicated resources, advanced security
-- **Best For**: Large organizations, compliance requirements, integration needs
+### 🏢 **Enterprise Deployment**
+- **Cost**: Varies by requirements
+- **Performance**: Dedicated resources
+- **Features**: Custom API limits, advanced security
+- **Best For**: Large organizations, compliance requirements
 
 ## Customization
 
@@ -418,47 +430,48 @@ python extraction/scripts/actor_disambiguation.py --test
 
 ### Common Issues
 
-**API Connection Errors**
-- Verify OpenAI API key in `.env` file
-- Check internet connection
-- Ensure API key has sufficient credits
+**🔑 API Key Problems**
+- Verify your OpenAI API key is correct
+- Check that you have sufficient API credits
+- Ensure your key has access to GPT-4o
 
-**Memory Issues**
-- Reduce batch size in configuration
-- Close other applications
+**⏱️ Processing Timeouts**
+- Reduce LLM call limits for faster processing
+- Use smaller PDF files for testing
+- Check your internet connection
+
+**💾 Memory Issues**
+- Close other applications to free up RAM
 - Use smaller PDF files
+- Restart the application if needed
 
-**Processing Failures**
-- Check PDF file integrity
-- Verify file format compatibility
-- Review error logs in console output
-
-**Performance Issues**
-- Reduce parallel workers setting
-- Increase system memory
-- Use cloud deployment for large files
+**📄 File Upload Issues**
+- Ensure PDF files are not corrupted
+- Check file size (recommended < 50MB)
+- Verify PDF contains readable text
 
 ### Known Limitations
 
-- **File Size**: Maximum 50MB per PDF file
-- **Processing Time**: Large reports may take 30+ minutes
-- **API Limits**: 50 requests/minute (OpenAI limit)
-- **Memory**: 4GB+ RAM recommended for large files
+- **File Size**: Recommended maximum 50MB per PDF
+- **Processing Time**: Large reports may take 10-30 minutes
+- **API Limits**: Subject to OpenAI rate limits
+- **Memory**: 4GB+ RAM recommended
 - **Format**: PDF files only (no Word, text, or other formats)
 
 ## Security and Privacy
 
-### Data Handling
-- **Local Processing**: All analysis performed locally
-- **No Data Retention**: Results not stored on external servers
-- **API Security**: Secure OpenAI API key management
-- **File Cleanup**: Automatic temporary file removal
+### 🔒 **Data Security**
+- **Individual API Keys**: Each user provides their own OpenAI API key
+- **Encrypted Storage**: API keys stored securely in browser cookies
+- **No Data Sharing**: Keys and data never shared between users
+- **Local Processing**: Analysis performed on your local machine
+- **Automatic Cleanup**: Temporary files removed after processing
 
-### Compliance
-- **OpenAI Usage**: Compliance with OpenAI API policies
-- **Data Privacy**: No personal data collection
-- **Research Ethics**: Appropriate use for policy analysis
-- **Academic Standards**: Adherence to research methodology
+### 🛡️ **Privacy Protection**
+- **No Data Retention**: Results not stored on external servers
+- **Session Isolation**: Each user session is completely separate
+- **Secure Transmission**: All API calls use HTTPS encryption
+- **User Control**: Users can clear their data anytime
 
 ## Future Roadmap
 
